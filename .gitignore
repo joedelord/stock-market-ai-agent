@@ -38,3 +38,6 @@ Thumbs.db
 *.temp
 *.swp
 *.swo
+
+# Claude Files
+CLAUDE.md

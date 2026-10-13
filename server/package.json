@@ -8,8 +8,11 @@
     "dev": "node --watch server.js",
     "migrate": "node scripts/runMigrations.js",
     "create-admin": "node scripts/createAdmin.js",
+    "update-prices": "node scripts/updatePrices.js",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "market:once": "node scripts/updatePrices.js",
+    "market:watch": "node marketScheduler.js"
   },
   "keywords": [],
   "author": "",
@@ -24,6 +27,7 @@
     "express-rate-limit": "^8.6.2",
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
+    "node-cron": "^4.6.0",
     "pg": "^8.22.0",
     "pino": "^10.4.0",
     "pino-http": "^11.0.0",

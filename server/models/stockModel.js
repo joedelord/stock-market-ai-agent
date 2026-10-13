@@ -77,9 +77,79 @@ const getStockPrices = async (stockId, limit = 100) => {
   return result.rows.reverse();
 };
 
+// Twelve Data returns UTC times without an offset, so they are read as UTC
+// explicitly instead of in the session time zone. A single statement keeps
+// the import all-or-nothing. Returns the number of inserted or updated rows.
+const saveStockPrices = async (stockId, interval, prices) => {
+  if (!Array.isArray(prices)) {
+    throw new TypeError("Prices must be an array");
+  }
+
+  if (prices.length === 0) {
+    return 0;
+  }
+
+  const result = await pool.query(
+    `INSERT INTO stock_prices (
+      stock_id,
+      price_time,
+      interval_code,
+      open,
+      high,
+      low,
+      close,
+      volume
+    )
+    SELECT
+      $1,
+      price.price_time AT TIME ZONE 'UTC',
+      $2,
+      price.open,
+      price.high,
+      price.low,
+      price.close,
+      price.volume
+    FROM UNNEST(
+      $3::timestamp[],
+      $4::numeric[],
+      $5::numeric[],
+      $6::numeric[],
+      $7::numeric[],
+      $8::bigint[]
+    ) AS price(
+      price_time,
+      open,
+      high,
+      low,
+      close,
+      volume
+    )
+    ON CONFLICT (stock_id, interval_code, price_time)
+    DO UPDATE SET
+      open = EXCLUDED.open,
+      high = EXCLUDED.high,
+      low = EXCLUDED.low,
+      close = EXCLUDED.close,
+      volume = EXCLUDED.volume`,
+    [
+      stockId,
+      interval,
+      prices.map((price) => price.priceTime),
+      prices.map((price) => price.open),
+      prices.map((price) => price.high),
+      prices.map((price) => price.low),
+      prices.map((price) => price.close),
+      prices.map((price) => price.volume),
+    ],
+  );
+
+  return result.rowCount;
+};
+
 module.exports = {
   getAllStocks,
   getStockById,
   createStock,
   getStockPrices,
+  saveStockPrices,
 };

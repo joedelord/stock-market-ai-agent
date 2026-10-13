@@ -2,6 +2,7 @@ const request = require("supertest");
 
 const app = require("../app");
 const pool = require("../config/db");
+const stockModel = require("../models/stockModel");
 const { clearDatabase } = require("./helpers/database");
 
 beforeEach(async () => {
@@ -340,5 +341,117 @@ describe("Stocks API", () => {
       }),
       prices: [],
     });
+  });
+});
+
+describe("saveStockPrices", () => {
+  // Shaped like the bars returned by marketDataService.fetchStockPrices.
+  const PRICES = [
+    {
+      priceTime: "2026-01-01 10:00:00",
+      open: "250.10",
+      high: "252.00",
+      low: "249.50",
+      close: "251.25",
+      volume: "1200",
+    },
+    {
+      priceTime: "2026-01-01 10:15:00",
+      open: "251.25",
+      high: "253.00",
+      low: "251.00",
+      close: "252.75",
+      volume: null,
+    },
+  ];
+
+  const getSavedPrices = async (stockId) => {
+    const result = await pool.query(
+      `SELECT
+        price_time,
+        interval_code,
+        open,
+        close,
+        volume
+      FROM stock_prices
+      WHERE stock_id = $1
+      ORDER BY price_time ASC`,
+      [stockId],
+    );
+
+    return result.rows;
+  };
+
+  test("saves prices with times read as UTC", async () => {
+    const created = await createStock();
+    const stockId = created.body.stock.id;
+
+    const savedCount = await stockModel.saveStockPrices(
+      stockId,
+      "15min",
+      PRICES,
+    );
+
+    expect(savedCount).toBe(2);
+
+    const rows = await getSavedPrices(stockId);
+
+    expect(rows.map((row) => row.price_time.toISOString())).toEqual([
+      "2026-01-01T10:00:00.000Z",
+      "2026-01-01T10:15:00.000Z",
+    ]);
+
+    expect(rows[0]).toMatchObject({
+      interval_code: "15min",
+      open: "250.100000",
+      close: "251.250000",
+      volume: "1200",
+    });
+
+    expect(rows[1].volume).toBeNull();
+  });
+
+  test("updates existing prices instead of duplicating them", async () => {
+    const created = await createStock();
+    const stockId = created.body.stock.id;
+
+    await stockModel.saveStockPrices(stockId, "15min", PRICES);
+
+    const savedCount = await stockModel.saveStockPrices(stockId, "15min", [
+      { ...PRICES[0], close: "260.00" },
+    ]);
+
+    expect(savedCount).toBe(1);
+
+    const rows = await getSavedPrices(stockId);
+
+    expect(rows).toHaveLength(2);
+    expect(rows[0].close).toBe("260.000000");
+  });
+
+  test("saves nothing when one price is invalid", async () => {
+    const created = await createStock();
+    const stockId = created.body.stock.id;
+
+    await expect(
+      stockModel.saveStockPrices(stockId, "15min", [
+        PRICES[0],
+        { ...PRICES[1], close: "0" },
+      ]),
+    ).rejects.toThrow();
+
+    expect(await getSavedPrices(stockId)).toEqual([]);
+  });
+
+  test("saves nothing for an empty price list", async () => {
+    const created = await createStock();
+
+    const savedCount = await stockModel.saveStockPrices(
+      created.body.stock.id,
+      "15min",
+      [],
+    );
+
+    expect(savedCount).toBe(0);
   });
 });
