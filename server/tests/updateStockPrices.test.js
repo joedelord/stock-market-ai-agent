@@ -65,6 +65,28 @@ describe("Update Stock Prices Job", () => {
     expect(results.every((r) => r.status === "success")).toBe(true);
   });
 
+  test("updates only stocks from selected exchanges", async () => {
+    const results = await updateStockPrices({
+      delayMs: 0,
+      exchanges: ["XHEL"],
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].symbol).toBe("NOKIA");
+    expect(marketDataService.fetchStockPrices).toHaveBeenCalledTimes(1);
+    expect(stockModel.saveStockPrices).toHaveBeenCalledWith(
+      2,
+      "15min",
+      sampleData.prices,
+    );
+  });
+
+  test("empty exchange list does not fetch prices", async () => {
+    const results = await updateStockPrices({ delayMs: 0, exchanges: [] });
+    expect(results).toEqual([]);
+    expect(marketDataService.fetchStockPrices).not.toHaveBeenCalled();
+  });
+
   test("skips inactive stocks", async () => {
     await updateStockPrices({ delayMs: 0 });
 

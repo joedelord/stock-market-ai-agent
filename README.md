@@ -274,12 +274,15 @@ Both wait 8 seconds between stocks to stay within the free plan's limit of
 `market:once` prints a result per stock and exits with code 1 if any
 failed.
 
-`market:watch` ([server/marketScheduler.js](server/marketScheduler.js))
-updates once at startup, then every 15 minutes on weekdays between 07:00
-and 21:59 UTC, which covers Helsinki and New York trading hours. That is 60
-runs a day with one request per active stock, so the free plan's 800
-requests per day covers about 13 stocks. On `SIGTERM` or `SIGINT` it
-finishes the current stock, closes the database pool and exits.
+`market:watch` ([server/scripts/startMarketScheduler.js](server/scripts/startMarketScheduler.js),
+schedule in [server/jobs/marketScheduler.js](server/jobs/marketScheduler.js))
+updates once at startup, then every 15 minutes on weekdays while New York
+(09:30-16:15 local time) or Helsinki (10:00-18:45 local time) is open. The
+extra 15 minutes after each close saves the last bar of the day. Market
+holidays are not handled yet. That is about 55 runs a day with one request
+per active stock, so the free plan's 800 requests per day covers about 14
+stocks. On `SIGTERM` or `SIGINT` it finishes the current stock, closes the
+database pool and exits, or forces an exit after 20 seconds.
 
 Free Twelve Data keys have a per-minute request limit, and some exchanges
 need a paid plan.
