@@ -1,135 +1,217 @@
-const pool = require("../config/db");
 const stockModel = require("../models/stockModel");
 const marketDataService = require("../services/marketDataService");
+
 const { updateStockPrices } = require("../jobs/updateStockPrices");
 
-const { clearDatabase } = require("./helpers/database");
-
-const PRICES = [
+const stocks = [
   {
-    priceTime: "2026-01-01 10:00:00",
-    open: "250.10",
-    high: "252.00",
-    low: "249.50",
-    close: "251.25",
-    volume: "1200",
+    id: 1,
+    symbol: "AAPL",
+    exchange: "XNAS",
+    is_active: true,
+  },
+  {
+    id: 2,
+    symbol: "NOKIA",
+    exchange: "XHEL",
+    is_active: true,
+  },
+  {
+    id: 3,
+    symbol: "MSFT",
+    exchange: "XNAS",
+    is_active: false,
   },
 ];
 
-beforeEach(async () => {
-  await clearDatabase();
-});
-
-afterEach(() => {
-  vi.restoreAllMocks();
-});
-
-afterAll(async () => {
-  await pool.end();
-});
-
-const createStock = (symbol, exchange) =>
-  stockModel.createStock({
-    symbol,
-    exchange,
-    name: `${symbol} Corporation`,
-    currency: "USD",
-  });
-
-const countPrices = async (stockId) => {
-  const result = await pool.query(
-    "SELECT COUNT(*)::int AS count FROM stock_prices WHERE stock_id = $1",
-    [stockId],
-  );
-
-  return result.rows[0].count;
+const sampleData = {
+  interval: "15min",
+  prices: [
+    {
+      priceTime: "2026-10-12 19:45:00",
+      open: "340.65",
+      high: "341.16",
+      low: "340.22",
+      close: "341.06",
+      volume: "2082898",
+    },
+  ],
 };
 
-describe("updateStockPrices", () => {
-  test("fetches and saves prices for active stocks", async () => {
-    const apple = await createStock("AAPL", "XNAS");
-    const inactive = await createStock("OLD", "XNYS");
+describe("Update Stock Prices Job", () => {
+  beforeEach(() => {
+    vi.spyOn(stockModel, "getAllStocks").mockResolvedValue(stocks);
 
-    await pool.query("UPDATE stocks SET is_active = FALSE WHERE id = $1", [
-      inactive.id,
-    ]);
+    vi.spyOn(marketDataService, "fetchStockPrices").mockResolvedValue(
+      sampleData,
+    );
 
-    const fetchSpy = vi
-      .spyOn(marketDataService, "fetchStockPrices")
-      .mockResolvedValue({ symbol: "AAPL", interval: "15min", prices: PRICES });
+    vi.spyOn(stockModel, "saveStockPrices").mockResolvedValue(1);
+  });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  test("updates all active stocks", async () => {
     const results = await updateStockPrices({ delayMs: 0 });
 
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(results).toHaveLength(2);
 
-    expect(fetchSpy).toHaveBeenCalledWith({
+    expect(marketDataService.fetchStockPrices).toHaveBeenCalledTimes(2);
+
+    expect(stockModel.saveStockPrices).toHaveBeenCalledTimes(2);
+
+    expect(results.every((r) => r.status === "success")).toBe(true);
+  });
+
+  test("skips inactive stocks", async () => {
+    await updateStockPrices({ delayMs: 0 });
+
+    const calls = marketDataService.fetchStockPrices.mock.calls;
+
+    const symbols = calls.map(([args]) => args.symbol);
+
+    expect(symbols).toContain("AAPL");
+    expect(symbols).toContain("NOKIA");
+    expect(symbols).not.toContain("MSFT");
+  });
+
+  test("passes correct options to the market data service", async () => {
+    const controller = new AbortController();
+
+    await updateStockPrices({ delayMs: 0, signal: controller.signal });
+
+    expect(marketDataService.fetchStockPrices).toHaveBeenNthCalledWith(1, {
       symbol: "AAPL",
       exchange: "XNAS",
       interval: "15min",
       outputSize: 5,
+      signal: controller.signal,
     });
 
-    expect(results).toEqual([
-      { symbol: "AAPL", exchange: "XNAS", status: "success", saved: 1 },
-    ]);
-
-    expect(await countPrices(apple.id)).toBe(1);
-    expect(await countPrices(inactive.id)).toBe(0);
+    expect(marketDataService.fetchStockPrices).toHaveBeenNthCalledWith(2, {
+      symbol: "NOKIA",
+      exchange: "XHEL",
+      interval: "15min",
+      outputSize: 5,
+      signal: controller.signal,
+    });
   });
 
-  test("continues with the next stock when one fails", async () => {
-    await createStock("AAPL", "XNAS");
-    const microsoft = await createStock("MSFT", "XNAS");
+  test("passes correct data to database", async () => {
+    await updateStockPrices({ delayMs: 0 });
 
-    vi.spyOn(marketDataService, "fetchStockPrices").mockImplementation(
-      async ({ symbol }) => {
-        if (symbol === "AAPL") {
-          throw new Error("API limit reached");
-        }
-
-        return { symbol, interval: "15min", prices: PRICES };
-      },
+    expect(stockModel.saveStockPrices).toHaveBeenCalledWith(
+      1,
+      "15min",
+      sampleData.prices,
     );
+  });
+
+  test("continues after API failure", async () => {
+    marketDataService.fetchStockPrices
+      .mockRejectedValueOnce(new Error("API unavailable"))
+      .mockResolvedValueOnce(sampleData);
 
     const results = await updateStockPrices({ delayMs: 0 });
+
+    expect(results[0]).toMatchObject({
+      symbol: "AAPL",
+      status: "error",
+      error: "API unavailable",
+    });
+
+    expect(results[1]).toMatchObject({
+      symbol: "NOKIA",
+      status: "success",
+    });
+
+    expect(stockModel.saveStockPrices).toHaveBeenCalledTimes(1);
+  });
+
+  test("handles database errors", async () => {
+    stockModel.saveStockPrices
+      .mockRejectedValueOnce(new Error("Database unavailable"))
+      .mockResolvedValueOnce(1);
+
+    const results = await updateStockPrices({ delayMs: 0 });
+
+    expect(results[0]).toMatchObject({
+      status: "error",
+      error: "Database unavailable",
+    });
+
+    expect(results[1].status).toBe("success");
+  });
+
+  test("returns empty array when no stocks exist", async () => {
+    stockModel.getAllStocks.mockResolvedValue([]);
+
+    const results = await updateStockPrices({ delayMs: 0 });
+
+    expect(results).toEqual([]);
+
+    expect(marketDataService.fetchStockPrices).not.toHaveBeenCalled();
+  });
+
+  test("does not fetch stocks if already aborted", async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    const results = await updateStockPrices({
+      delayMs: 0,
+      signal: controller.signal,
+    });
+
+    expect(results).toEqual([]);
+    expect(stockModel.getAllStocks).not.toHaveBeenCalled();
+  });
+
+  test("stops before the next stock after abort", async () => {
+    const controller = new AbortController();
+
+    marketDataService.fetchStockPrices.mockImplementation(async () => {
+      controller.abort();
+      return sampleData;
+    });
+
+    const results = await updateStockPrices({
+      delayMs: 0,
+      signal: controller.signal,
+    });
 
     expect(results).toEqual([
       {
         symbol: "AAPL",
         exchange: "XNAS",
-        status: "error",
-        error: "API limit reached",
+        status: "success",
+        saved: 1,
       },
-      { symbol: "MSFT", exchange: "XNAS", status: "success", saved: 1 },
     ]);
 
-    expect(await countPrices(microsoft.id)).toBe(1);
+    expect(marketDataService.fetchStockPrices).toHaveBeenCalledTimes(1);
+    expect(stockModel.saveStockPrices).toHaveBeenCalledTimes(1);
   });
 
-  test("stops before the next stock when the signal is aborted", async () => {
-    await createStock("AAPL", "XNAS");
-    await createStock("MSFT", "XNAS");
-
+  test("abort during the delay ends the run without waiting", async () => {
     const controller = new AbortController();
 
-    const fetchSpy = vi
-      .spyOn(marketDataService, "fetchStockPrices")
-      .mockImplementation(async ({ symbol }) => {
-        controller.abort();
+    stockModel.saveStockPrices.mockImplementation(async () => {
+      setTimeout(() => controller.abort(), 10);
+      return 1;
+    });
 
-        return { symbol, interval: "15min", prices: PRICES };
-      });
+    const startedAt = Date.now();
 
-    // A long delay proves the abort also ends the wait between stocks.
     const results = await updateStockPrices({
       delayMs: 60000,
       signal: controller.signal,
     });
 
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-
-    expect(results).toEqual([
-      { symbol: "AAPL", exchange: "XNAS", status: "success", saved: 1 },
-    ]);
+    expect(Date.now() - startedAt).toBeLessThan(1000);
+    expect(results).toHaveLength(1);
+    expect(results[0].symbol).toBe("AAPL");
+    expect(marketDataService.fetchStockPrices).toHaveBeenCalledTimes(1);
   });
 });

@@ -5,7 +5,7 @@ const REQUEST_TIMEOUT_MS = 15000;
 
 // Twelve Data puts the useful error message in a JSON body with status
 // "error", sometimes even with HTTP 200, so the body is checked first.
-const requestTwelveData = async (path, params) => {
+const requestTwelveData = async (path, params, signal) => {
   const apiKey = process.env.TWELVE_DATA_API_KEY;
 
   if (!apiKey) {
@@ -20,8 +20,14 @@ const requestTwelveData = async (path, params) => {
 
   url.searchParams.set("apikey", apiKey);
 
+  const timeoutSignal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+
+  const requestSignal = signal
+    ? AbortSignal.any([signal, timeoutSignal])
+    : timeoutSignal;
+
   const response = await fetch(url, {
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    signal: requestSignal,
   });
 
   const data = await response.json().catch(() => null);
@@ -42,14 +48,19 @@ const fetchStockPrices = async ({
   exchange,
   interval = "15min",
   outputSize = 30,
+  signal,
 }) => {
-  const data = await requestTwelveData("/time_series", {
-    symbol,
-    exchange: getProviderExchange(exchange),
-    interval,
-    outputsize: outputSize,
-    timezone: "UTC",
-  });
+  const data = await requestTwelveData(
+    "/time_series",
+    {
+      symbol,
+      exchange: getProviderExchange(exchange),
+      interval,
+      outputsize: outputSize,
+      timezone: "UTC",
+    },
+    signal,
+  );
 
   if (!Array.isArray(data.values)) {
     throw new Error("Invalid Twelve Data response");
@@ -69,10 +80,12 @@ const fetchStockPrices = async ({
   };
 };
 
-const searchStocks = async (query) => {
-  const data = await requestTwelveData("/symbol_search", {
-    symbol: query,
-  });
+const searchStocks = async (query, { signal } = {}) => {
+  const data = await requestTwelveData(
+    "/symbol_search",
+    { symbol: query },
+    signal,
+  );
 
   return data.data ?? [];
 };

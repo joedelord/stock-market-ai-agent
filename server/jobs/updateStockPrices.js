@@ -16,6 +16,10 @@ const updateStockPrices = async ({
   delayMs = REQUEST_DELAY_MS,
   signal,
 } = {}) => {
+  if (signal?.aborted) {
+    return [];
+  }
+
   const stocks = await stockModel.getAllStocks();
   const activeStocks = stocks.filter((stock) => stock.is_active);
 
@@ -37,6 +41,7 @@ const updateStockPrices = async ({
         exchange: stock.exchange,
         interval: INTERVAL,
         outputSize: OUTPUT_SIZE,
+        signal,
       });
 
       const saved = await stockModel.saveStockPrices(
