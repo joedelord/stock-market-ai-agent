@@ -117,7 +117,7 @@ function StockChart({
               aria-label={`${stock.name}: ${points.length} price points.
                 First ${formatPrice(points[0].close, stock.currency)},
                 latest ${formatPrice(points.at(-1).close, stock.currency)}.`}
-              className="block w-full min-w-[560px]"
+              className="block w-full min-w-140"
             >
               {[0, 1, 2, 3, 4].map((index) => {
                 const value = yMax - ((yMax - yMin) * index) / 4;
