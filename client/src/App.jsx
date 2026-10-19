@@ -13,6 +13,8 @@ import NotFound from "./pages/NotFound";
 import Register from "./pages/Register";
 import ResetPassword from "./pages/ResetPassword";
 
+import StockDashboard from "./pages/StockDashboard";
+
 function App() {
   return (
     <BrowserRouter>
@@ -29,6 +31,8 @@ function App() {
 
         <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<Dashboard />} />
+
+          <Route path="/stocks" element={<StockDashboard />} />
 
           <Route path="/account/password" element={<ChangePassword />} />
         </Route>

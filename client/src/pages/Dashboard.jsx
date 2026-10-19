@@ -23,6 +23,10 @@ function Dashboard() {
         <p className="py-0.5">Email: {user.email}</p>
         <p className="py-0.5">Role: {user.role}</p>
 
+        <p className="py-0.5 underline text-blue-700">
+          <Link to="/stocks">View stocks</Link>
+        </p>
+
         {user.role === "admin" && (
           <p className="py-0.5 underline text-blue-700">
             <Link to="/admin">Open admin page</Link>
