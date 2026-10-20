@@ -80,6 +80,16 @@ const changePasswordLimiter = createLimiter({
   message: "Too many password change attempts. Please try again later.",
 });
 
+// Each analysis is a paid AI request, so one user cannot use up the shared
+// provider quota. Keyed on the user, so it must run after requireAuth.
+const stockAnalysisLimiter = createLimiter({
+  name: "stock-analysis",
+  windowMs: FIFTEEN_MINUTES,
+  limit: 10,
+  keyGenerator: (req) => String(req.user.id),
+  message: "Too many analysis requests. Please try again later.",
+});
+
 module.exports = {
   loginLimiter,
   loginEmailLimiter,
@@ -87,4 +97,5 @@ module.exports = {
   passwordResetLimiter,
   passwordResetEmailLimiter,
   changePasswordLimiter,
+  stockAnalysisLimiter,
 };

@@ -51,4 +51,33 @@ describe("Rate limits", () => {
 
     expect(otherAccount.status).toBe(401);
   });
+
+  test("limits stock analysis requests per user", async () => {
+    const agent = request.agent(app);
+
+    await agent.post("/api/auth/register").send({
+      username: "testuser",
+      email: "test@example.com",
+      password: "password123",
+    });
+
+    await agent.post("/api/auth/login").send({
+      email: "test@example.com",
+      password: "password123",
+    });
+
+    // Unknown stocks keep the AI provider out of the test; requests still count.
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const response = await agent.post("/api/stocks/999/analysis");
+
+      expect(response.status).toBe(404);
+    }
+
+    const blocked = await agent.post("/api/stocks/999/analysis");
+
+    expect(blocked.status).toBe(429);
+    expect(blocked.body).toEqual({
+      error: "Too many analysis requests. Please try again later.",
+    });
+  });
 });

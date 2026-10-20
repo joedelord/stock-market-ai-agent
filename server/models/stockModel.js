@@ -57,7 +57,8 @@ const createStock = async ({ symbol, exchange, name, currency }) => {
 };
 
 // Fetches the newest prices and returns them oldest first for charting.
-const getStockPrices = async (stockId, limit = 100) => {
+// Without an interval, the limit counts rows of every interval together.
+const getStockPrices = async (stockId, limit = 100, interval = null) => {
   const result = await pool.query(
     `SELECT
       price_time,
@@ -69,9 +70,10 @@ const getStockPrices = async (stockId, limit = 100) => {
       volume
     FROM stock_prices
     WHERE stock_id = $1
+      AND ($3::text IS NULL OR interval_code = $3)
     ORDER BY price_time DESC
     LIMIT $2`,
-    [stockId, limit],
+    [stockId, limit, interval],
   );
 
   return result.rows.reverse();
