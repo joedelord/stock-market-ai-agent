@@ -6,9 +6,14 @@ const errorHandler = (error, req, res, next) => {
   }
 
   if (error.expose && error.status) {
-    // Exposed 5xx errors still mean something broke upstream, so keep a log of them.
     if (error.status >= SERVER_ERROR_STATUS) {
-      req.log.error({ err: error }, "Upstream error");
+      req.log.error(
+        {
+          err: error,
+          cause: error.cause?.message,
+        },
+        "Upstream error",
+      );
     }
 
     if (error.retryAfter) {
@@ -20,7 +25,13 @@ const errorHandler = (error, req, res, next) => {
     });
   }
 
-  req.log.error({ err: error }, "Unhandled error");
+  req.log.error(
+    {
+      err: error,
+      cause: error.cause?.message,
+    },
+    "Unhandled error",
+  );
 
   return res.status(SERVER_ERROR_STATUS).json({
     error: "Internal server error",

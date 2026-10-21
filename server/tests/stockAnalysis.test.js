@@ -215,7 +215,7 @@ describe("Stock analysis", () => {
       ok: false,
       status: 401,
       headers: new Headers(),
-      body: { cancel: vi.fn().mockResolvedValue(undefined) },
+      json: vi.fn().mockResolvedValue({ error: { message: "Invalid API Key" } }),
     });
 
     const agent = await loginAsUser();

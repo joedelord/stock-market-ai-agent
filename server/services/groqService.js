@@ -2,7 +2,9 @@ const HttpError = require("../utils/httpError");
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const REQUEST_TIMEOUT_MS = 30_000;
-const MAX_COMPLETION_TOKENS = 800;
+// Reasoning models count their hidden reasoning in this limit, so leave room
+// beyond the ~350 tokens a 250-word answer needs.
+const MAX_COMPLETION_TOKENS = 2000;
 // Low temperature: the output is a factual summary, variety adds nothing.
 const TEMPERATURE = 0.2;
 
@@ -33,6 +35,17 @@ Do not assume the data is live, complete or evenly spaced.
 Do not make predictions, price targets or buy/sell recommendations.
 Keep the response under 250 words.
 `.trim();
+
+const readErrorMessage = async (response) => {
+  try {
+    const body = await response.json();
+    const message = body?.error?.message;
+
+    return typeof message === "string" ? message : undefined;
+  } catch {
+    return undefined;
+  }
+};
 
 const isTimeout = (error) =>
   error.name === "TimeoutError" || error.name === "AbortError";
@@ -107,11 +120,12 @@ const generateStockAnalysis = async ({ stock, metrics }) => {
   }
 
   if (!response.ok) {
-    // The provider's error body is never shown to users, so release the connection.
-    await response.body?.cancel().catch(() => {});
-
-    // Keep the upstream status for the logs, e.g. 401 means a bad API key.
-    const cause = new Error(`Groq responded with HTTP ${response.status}`);
+    // Groq's own message (e.g. "model does not exist") goes to the logs only;
+    // users see the generic message below.
+    const detail = await readErrorMessage(response);
+    const cause = new Error(
+      `Groq responded with HTTP ${response.status}${detail ? `: ${detail}` : ""}`,
+    );
 
     if (response.status === TOO_MANY_REQUESTS) {
       const error = new HttpError(

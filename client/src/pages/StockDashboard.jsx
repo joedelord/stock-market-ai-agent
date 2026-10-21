@@ -3,6 +3,7 @@ import { Link } from "react-router";
 
 import StockList from "../components/StockList";
 import StockChart from "../components/StockChart";
+import StockAnalysis from "../components/StockAnalysis";
 import { getErrorMessage } from "../services/errors";
 import { getStocks, getStockPrices } from "../services/stockService";
 
@@ -45,9 +46,11 @@ function StockDashboard() {
           const stockId = stockList[index].id;
 
           if (result.status === "fulfilled") {
-            // The server returns the newest price first; the list and chart
-            // expect oldest first.
-            nextPrices[stockId] = result.value.prices.toReversed();
+            // Sort by time so the list and chart don't depend on the order
+            // the server returns.
+            nextPrices[stockId] = [...result.value.prices].sort(
+              (a, b) => new Date(a.price_time) - new Date(b.price_time),
+            );
           } else {
             nextErrors[stockId] = getErrorMessage(
               result.reason,
@@ -133,17 +136,23 @@ function StockDashboard() {
           </p>
         )}
 
-        {errorMessage ? (
+        {errorMessage && (
           <p
             role="alert"
             className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800"
           >
             {errorMessage}
           </p>
-        ) : isLoading ? (
-          <p role="status" className="py-12 text-center text-gray-500">
-            Loading stocks and prices...
-          </p>
+        )}
+
+        {/* After the first load, a refresh keeps the current data on screen,
+            so a running or finished AI analysis is not thrown away. */}
+        {!loadedAt ? (
+          isLoading && (
+            <p role="status" className="py-12 text-center text-gray-500">
+              Loading stocks and prices...
+            </p>
+          )
         ) : (
           <>
             {failedStocks.length > 0 && (
@@ -181,11 +190,15 @@ function StockDashboard() {
             </section>
 
             {selectedStock && (
-              <StockChart
-                stock={selectedStock}
-                prices={pricesByStockId[selectedStockId] ?? []}
-                errorMessage={priceErrors[selectedStockId] ?? ""}
-              />
+              <>
+                <StockChart
+                  stock={selectedStock}
+                  prices={pricesByStockId[selectedStockId] ?? []}
+                  errorMessage={priceErrors[selectedStockId] ?? ""}
+                />
+
+                <StockAnalysis key={selectedStock.id} stock={selectedStock} />
+              </>
             )}
           </>
         )}

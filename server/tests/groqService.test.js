@@ -41,14 +41,15 @@ const successfulResponse = (overrides = {}) => ({
   }),
 });
 
-const failedResponse = (status, headers = {}) => ({
+// Without errorBody, the body is not JSON, like an HTML error page from a proxy.
+const failedResponse = (status, { headers = {}, errorBody } = {}) => ({
   ok: false,
   status,
   headers: new Headers(headers),
-  body: {
-    cancel: vi.fn().mockResolvedValue(undefined),
-  },
-  json: vi.fn(),
+  json:
+    errorBody === undefined
+      ? vi.fn().mockRejectedValue(new SyntaxError("Unexpected token <"))
+      : vi.fn().mockResolvedValue(errorBody),
 });
 
 describe("Groq Service", () => {
@@ -91,7 +92,7 @@ describe("Groq Service", () => {
     const body = JSON.parse(options.body);
 
     expect(body.model).toBe("test-model");
-    expect(body.max_completion_tokens).toBe(800);
+    expect(body.max_completion_tokens).toBe(2000);
     expect(body.temperature).toBe(0.2);
     expect(body.messages[0].role).toBe("system");
     expect(body.messages[1].role).toBe("user");
@@ -132,8 +133,11 @@ describe("Groq Service", () => {
   );
 
   test("handles provider rate limits without exposing the raw error", async () => {
-    const response = failedResponse(429);
-    fetchMock.mockResolvedValue(response);
+    fetchMock.mockResolvedValue(
+      failedResponse(429, {
+        errorBody: { error: { message: "Rate limit reached for model" } },
+      }),
+    );
 
     await expect(
       generateStockAnalysis({ stock, metrics }),
@@ -142,13 +146,35 @@ describe("Groq Service", () => {
       expose: true,
       message: "AI analysis is temporarily busy. Please try again later.",
     });
+  });
 
-    expect(response.body.cancel).toHaveBeenCalledOnce();
-    expect(response.json).not.toHaveBeenCalled();
+  test("keeps the provider's error message for the logs", async () => {
+    fetchMock.mockResolvedValue(
+      failedResponse(404, {
+        errorBody: {
+          error: {
+            message: "The model `old-model` does not exist",
+            code: "model_not_found",
+          },
+        },
+      }),
+    );
+
+    await expect(
+      generateStockAnalysis({ stock, metrics }),
+    ).rejects.toMatchObject({
+      status: 502,
+      message: "AI analysis service returned an error.",
+      cause: expect.objectContaining({
+        message: "Groq responded with HTTP 404: The model `old-model` does not exist",
+      }),
+    });
   });
 
   test("passes the provider's Retry-After on rate limits", async () => {
-    fetchMock.mockResolvedValue(failedResponse(429, { "retry-after": "12" }));
+    fetchMock.mockResolvedValue(
+      failedResponse(429, { headers: { "retry-after": "12" } }),
+    );
 
     await expect(
       generateStockAnalysis({ stock, metrics }),

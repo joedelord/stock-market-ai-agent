@@ -41,7 +41,7 @@ describe("Error Handler", () => {
     errorHandler(error, req, res, vi.fn());
 
     expect(req.log.error).toHaveBeenCalledWith(
-      { err: error },
+      { err: error, cause: "Groq responded with HTTP 401" },
       "Upstream error",
     );
     expect(res.status).toHaveBeenCalledWith(502);
@@ -68,7 +68,7 @@ describe("Error Handler", () => {
     errorHandler(error, req, res, vi.fn());
 
     expect(req.log.error).toHaveBeenCalledWith(
-      { err: error },
+      { err: error, cause: undefined },
       "Unhandled error",
     );
     expect(res.status).toHaveBeenCalledWith(500);
