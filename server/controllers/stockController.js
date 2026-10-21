@@ -64,11 +64,16 @@ const getStockPrices = async (req, res, next) => {
       });
     }
 
-    const prices = await stockModel.getStockPrices(stockId, limit);
+    const [prices, quote] = await Promise.all([
+      stockModel.getStockPrices(stockId, limit),
+      stockModel.getStockQuote(stockId),
+    ]);
 
     return res.json({
       stock,
       prices,
+      // Always present, so clients can rely on the field.
+      quote: quote ?? null,
     });
   } catch (error) {
     return next(error);

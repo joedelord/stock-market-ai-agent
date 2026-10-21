@@ -1,4 +1,5 @@
 const { getProviderExchange } = require("../config/exchangeMapping");
+const { parseDecimal } = require("../utils/parseDecimal");
 
 const BASE_URL = "https://api.twelvedata.com";
 const REQUEST_TIMEOUT_MS = 15000;
@@ -90,7 +91,41 @@ const searchStocks = async (query, { signal } = {}) => {
   return data.data ?? [];
 };
 
+const fetchStockQuote = async ({ symbol, exchange, signal }) => {
+  const data = await requestTwelveData(
+    "/quote",
+    {
+      symbol,
+      exchange: getProviderExchange(exchange),
+    },
+    signal,
+  );
+
+  const close = parseDecimal(data.close);
+  const previousClose = parseDecimal(data.previous_close);
+  const timestamp = Number(data.timestamp);
+
+  if (
+    !Number.isFinite(close) ||
+    close <= 0 ||
+    !Number.isFinite(previousClose) ||
+    previousClose <= 0 ||
+    !Number.isInteger(timestamp) ||
+    timestamp <= 0
+  ) {
+    throw new Error("Invalid Twelve Data quote response");
+  }
+
+  // The day change is calculated from these when the quote is read.
+  return {
+    priceTime: new Date(timestamp * 1000).toISOString(),
+    close,
+    previousClose,
+  };
+};
+
 module.exports = {
   fetchStockPrices,
   searchStocks,
+  fetchStockQuote,
 };

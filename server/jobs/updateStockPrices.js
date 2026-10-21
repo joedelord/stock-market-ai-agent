@@ -6,8 +6,16 @@ const marketDataService = require("../services/marketDataService");
 const INTERVAL = "15min";
 const OUTPUT_SIZE = 5;
 const REQUEST_DELAY_MS = 8000;
+// The day change barely moves within an hour, and each quote costs an API
+// credit, so a stored quote is reused until it is this old.
+const QUOTE_MAX_AGE_MS = 60 * 60 * 1000;
+
+const isQuoteFresh = (quote) =>
+  Boolean(quote) &&
+  Date.now() - new Date(quote.fetched_at).getTime() < QUOTE_MAX_AGE_MS;
 
 // exchanges is optional: manual updates can still process every active stock.
+
 const updateStockPrices = async ({
   delayMs = REQUEST_DELAY_MS,
   signal,
@@ -16,22 +24,38 @@ const updateStockPrices = async ({
   if (signal?.aborted) return [];
 
   const stocks = await stockModel.getAllStocks();
+
   const activeStocks = stocks.filter(
     (stock) =>
-      stock.is_active &&
-      (!exchanges || exchanges.includes(stock.exchange)),
+      stock.is_active && (!exchanges || exchanges.includes(stock.exchange)),
   );
 
   const results = [];
+  let hasRequested = false;
 
-  for (const [index, stock] of activeStocks.entries()) {
-    if (index > 0) {
-      await wait(delayMs, undefined, { signal }).catch(() => {});
+  const beforeRequest = async () => {
+    if (hasRequested) {
+      await wait(delayMs, undefined, { signal });
     }
 
+    signal?.throwIfAborted();
+    hasRequested = true;
+  };
+
+  for (const stock of activeStocks) {
     if (signal?.aborted) break;
 
+    const result = {
+      symbol: stock.symbol,
+      exchange: stock.exchange,
+      status: "success",
+      saved: 0,
+      quoteSaved: false,
+    };
+
     try {
+      await beforeRequest();
+
       const data = await marketDataService.fetchStockPrices({
         symbol: stock.symbol,
         exchange: stock.exchange,
@@ -40,27 +64,52 @@ const updateStockPrices = async ({
         signal,
       });
 
-      // Finish the stock already in progress, then stop before the next one.
-      const saved = await stockModel.saveStockPrices(
+      // Persist a response already received, even if cancellation follows.
+      result.saved = await stockModel.saveStockPrices(
         stock.id,
         data.interval,
         data.prices,
       );
-
-      results.push({
-        symbol: stock.symbol,
-        exchange: stock.exchange,
-        status: "success",
-        saved,
-      });
     } catch (error) {
-      results.push({
-        symbol: stock.symbol,
-        exchange: stock.exchange,
-        status: "error",
-        error: error.message,
-      });
+      if (signal?.aborted) break;
+
+      result.status = "error";
+      result.error = error.message;
     }
+
+    if (signal?.aborted) {
+      results.push(result);
+      break;
+    }
+
+    try {
+      const storedQuote = await stockModel.getStockQuote(stock.id);
+
+      if (isQuoteFresh(storedQuote)) {
+        result.quoteSkipped = true;
+      } else {
+        await beforeRequest();
+
+        const quote = await marketDataService.fetchStockQuote({
+          symbol: stock.symbol,
+          exchange: stock.exchange,
+          signal,
+        });
+
+        const savedQuote = await stockModel.saveStockQuote(stock.id, quote);
+
+        result.quoteSaved = Boolean(savedQuote);
+      }
+    } catch (error) {
+      if (signal?.aborted) {
+        results.push(result);
+        break;
+      }
+
+      result.quoteError = error.message;
+    }
+
+    results.push(result);
   }
 
   return results;

@@ -148,10 +148,62 @@ const saveStockPrices = async (stockId, interval, prices) => {
   return result.rowCount;
 };
 
+// The WHERE clause keeps an older quote from overwriting a newer stored one;
+// then nothing is returned.
+const saveStockQuote = async (stockId, quote) => {
+  const result = await pool.query(
+    `INSERT INTO stock_quotes (
+      stock_id,
+      price_time,
+      close,
+      previous_close,
+      fetched_at
+    )
+    VALUES ($1, $2, $3, $4, NOW())
+    ON CONFLICT (stock_id)
+    DO UPDATE SET
+      price_time = EXCLUDED.price_time,
+      close = EXCLUDED.close,
+      previous_close = EXCLUDED.previous_close,
+      fetched_at = EXCLUDED.fetched_at
+    WHERE EXCLUDED.price_time >= stock_quotes.price_time
+    RETURNING
+      stock_id,
+      price_time,
+      close,
+      previous_close,
+      fetched_at`,
+    [stockId, quote.priceTime, quote.close, quote.previousClose],
+  );
+
+  return result.rows[0];
+};
+
+const getStockQuote = async (stockId) => {
+  const result = await pool.query(
+    `SELECT
+      stock_id,
+      price_time,
+      close,
+      previous_close,
+      close - previous_close AS day_change,
+      ((close - previous_close) / previous_close) * 100
+        AS day_change_percent,
+      fetched_at
+    FROM stock_quotes
+    WHERE stock_id = $1`,
+    [stockId],
+  );
+
+  return result.rows[0];
+};
+
 module.exports = {
   getAllStocks,
   getStockById,
   createStock,
   getStockPrices,
   saveStockPrices,
+  saveStockQuote,
+  getStockQuote,
 };

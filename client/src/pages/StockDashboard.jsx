@@ -14,6 +14,7 @@ function StockDashboard() {
   const [pricesByStockId, setPricesByStockId] = useState({});
   const [priceErrors, setPriceErrors] = useState({});
   const [selectedStockId, setSelectedStockId] = useState(null);
+  const [quotesByStockId, setQuotesByStockId] = useState({});
 
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -41,6 +42,7 @@ function StockDashboard() {
 
         const nextPrices = {};
         const nextErrors = {};
+        const nextQuotes = {};
 
         results.forEach((result, index) => {
           const stockId = stockList[index].id;
@@ -51,6 +53,8 @@ function StockDashboard() {
             nextPrices[stockId] = [...result.value.prices].sort(
               (a, b) => new Date(a.price_time) - new Date(b.price_time),
             );
+
+            nextQuotes[stockId] = result.value.quote ?? null;
           } else {
             nextErrors[stockId] = getErrorMessage(
               result.reason,
@@ -62,6 +66,7 @@ function StockDashboard() {
         setStocks(stockList);
         setPricesByStockId(nextPrices);
         setPriceErrors(nextErrors);
+        setQuotesByStockId(nextQuotes);
 
         setSelectedStockId((currentId) =>
           stockList.some((stock) => stock.id === currentId)
@@ -179,13 +184,17 @@ function StockDashboard() {
               <StockList
                 stocks={stocks}
                 pricesByStockId={pricesByStockId}
+                quotesByStockId={quotesByStockId}
                 selectedStockId={selectedStockId}
                 onSelectStock={setSelectedStockId}
               />
 
               <p className="mt-2 text-xs text-gray-500">
-                The change compares the two latest prices with the same
-                interval. Select a stock name to open its chart.
+                15 min change compares the latest stored bars of the same
+                interval. Day change uses a separate quote and the previous
+                trading day's close. Its quote price and time (Helsinki) are
+                shown below the percentage. Select a stock name to open its
+                chart.
               </p>
             </section>
 

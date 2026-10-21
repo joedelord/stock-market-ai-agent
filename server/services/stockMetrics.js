@@ -1,4 +1,5 @@
 const HttpError = require("../utils/httpError");
+const { parseDecimal } = require("../utils/parseDecimal");
 
 const DEFAULT_INTERVAL = "15min";
 const UNPROCESSABLE_ENTITY = 422;
@@ -6,19 +7,6 @@ const SMA_SHORT_PERIOD = 20;
 const SMA_LONG_PERIOD = 50;
 
 const dataError = (message) => new HttpError(UNPROCESSABLE_ENTITY, message);
-
-// pg returns NUMERIC columns as strings, and Number("") would silently be 0.
-const parseClose = (value) => {
-  if (
-    value === null ||
-    value === undefined ||
-    (typeof value === "string" && value.trim() === "")
-  ) {
-    return NaN;
-  }
-
-  return Number(value);
-};
 
 const calculateStockMetrics = (prices, interval = DEFAULT_INTERVAL) => {
   if (!Array.isArray(prices)) {
@@ -33,7 +21,7 @@ const calculateStockMetrics = (prices, interval = DEFAULT_INTERVAL) => {
         price.price_time === null || price.price_time === undefined
           ? NaN
           : new Date(price.price_time).getTime(),
-      close: parseClose(price.close),
+      close: parseDecimal(price.close),
     }))
     .sort((a, b) => a.time - b.time);
 
