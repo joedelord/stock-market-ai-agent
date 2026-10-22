@@ -53,7 +53,7 @@ const storedQuote = (ageMs) => ({
 
 describe("Update Stock Prices Job", () => {
   beforeEach(() => {
-    vi.spyOn(stockModel, "getAllStocks").mockResolvedValue(stocks);
+    vi.spyOn(stockModel, "getFollowedStocks").mockResolvedValue(stocks);
 
     vi.spyOn(marketDataService, "fetchStockPrices").mockResolvedValue(
       sampleData,
@@ -197,7 +197,7 @@ describe("Update Stock Prices Job", () => {
   });
 
   test("returns empty array when no stocks exist", async () => {
-    stockModel.getAllStocks.mockResolvedValue([]);
+    stockModel.getFollowedStocks.mockResolvedValue([]);
 
     const results = await updateStockPrices({ delayMs: 0 });
 
@@ -216,7 +216,7 @@ describe("Update Stock Prices Job", () => {
     });
 
     expect(results).toEqual([]);
-    expect(stockModel.getAllStocks).not.toHaveBeenCalled();
+    expect(stockModel.getFollowedStocks).not.toHaveBeenCalled();
   });
 
   test("stops before the next stock after abort", async () => {

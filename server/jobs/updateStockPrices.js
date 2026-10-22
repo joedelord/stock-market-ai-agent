@@ -14,7 +14,7 @@ const isQuoteFresh = (quote) =>
   Boolean(quote) &&
   Date.now() - new Date(quote.fetched_at).getTime() < QUOTE_MAX_AGE_MS;
 
-// exchanges is optional: manual updates can still process every active stock.
+// exchanges is optional: manual updates process followed active stocks on every exchange.
 
 const updateStockPrices = async ({
   delayMs = REQUEST_DELAY_MS,
@@ -23,7 +23,7 @@ const updateStockPrices = async ({
 } = {}) => {
   if (signal?.aborted) return [];
 
-  const stocks = await stockModel.getAllStocks();
+  const stocks = await stockModel.getFollowedStocks();
 
   const activeStocks = stocks.filter(
     (stock) =>

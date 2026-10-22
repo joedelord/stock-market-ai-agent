@@ -50,13 +50,19 @@ function getChangeColor(value) {
 
 function StockList({
   stocks,
+  onRemoveStock,
+  disabled = false,
   pricesByStockId = {},
   selectedStockId,
   onSelectStock,
   quotesByStockId = {},
 }) {
   if (stocks.length === 0) {
-    return <p className="p-6 text-gray-500">No tracked stocks yet.</p>;
+    return (
+      <p className="p-6 text-gray-500">
+        No tracked stocks yet. Add your first stock above.
+      </p>
+    );
   }
 
   return (
@@ -64,9 +70,9 @@ function StockList({
       <table className="w-full text-left text-sm">
         <caption className="sr-only">
           Stocks. The 15 min change compares the two latest stored prices. The
-          day change compares the latest quote with the previous trading
-          day's close; its quote price and time are shown below it. Select a
-          stock to see its chart.
+          day change compares the latest quote with the previous trading day's
+          close; its quote price and time are shown below it. Select a stock to
+          see its chart.
         </caption>
 
         <thead className="bg-gray-50 text-gray-600">
@@ -86,6 +92,11 @@ function StockList({
             <th scope="col" className="px-4 py-3">
               Price time (Helsinki)
             </th>
+            {onRemoveStock && (
+              <th scope="col" className="px-4 py-3">
+                Watchlist
+              </th>
+            )}
           </tr>
         </thead>
 
@@ -166,6 +177,19 @@ function StockList({
                 <td className="whitespace-nowrap px-4 py-3 text-gray-500">
                   {formatTime(latest?.price_time)}
                 </td>
+                {onRemoveStock && (
+                  <td className="px-4 py-3">
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => onRemoveStock(stock.id)}
+                      aria-label={`Unfollow ${stock.name} (${stock.exchange})`}
+                      className="rounded px-2 py-1 text-red-700 underline disabled:opacity-50"
+                    >
+                      Unfollow
+                    </button>
+                  </td>
+                )}
               </tr>
             );
           })}

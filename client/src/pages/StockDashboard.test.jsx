@@ -43,6 +43,7 @@ function createPrices(previous, latest) {
 
 function createRoutes(overrides = {}) {
   return {
+    "GET /me/stocks": () => [200, { stocks }],
     "GET /stocks": () => [200, { stocks }],
 
     "GET /stocks/1/prices": () => [
@@ -84,9 +85,9 @@ describe("StockDashboard", () => {
     renderDashboard();
 
     const table = await screen.findByRole("table");
-    const appleRow = within(table).getByRole("row", { name: /Apple/ });
+    const appleRow = within(table).getByRole("row", { name: /^Apple/ });
     const microsoftRow = within(table).getByRole("row", {
-      name: /Microsoft/,
+      name: /^Microsoft/,
     });
 
     expect(within(appleRow).getByText("US$110.00")).toBeInTheDocument();
@@ -95,7 +96,7 @@ describe("StockDashboard", () => {
     expect(within(microsoftRow).getByText("US$190.00")).toBeInTheDocument();
     expect(within(microsoftRow).getByText("-5.00 %")).toBeInTheDocument();
 
-    expect(screen.getByRole("button", { name: /Apple/ })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: /^Apple/ })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -112,7 +113,7 @@ describe("StockDashboard", () => {
     renderDashboard();
 
     const microsoftButton = await screen.findByRole("button", {
-      name: /Microsoft/,
+      name: /^Microsoft/,
     });
 
     const requestCount = requests.length;
@@ -121,7 +122,7 @@ describe("StockDashboard", () => {
 
     expect(microsoftButton).toHaveAttribute("aria-pressed", "true");
 
-    expect(screen.getByRole("button", { name: /Apple/ })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: /^Apple/ })).toHaveAttribute(
       "aria-pressed",
       "false",
     );
@@ -141,7 +142,7 @@ describe("StockDashboard", () => {
   it("shows an error when loading the stock list fails", async () => {
     mockApi(
       createRoutes({
-        "GET /stocks": () => [500, { error: "Internal server error" }],
+        "GET /me/stocks": () => [500, { error: "Internal server error" }],
       }),
     );
 
@@ -153,9 +154,7 @@ describe("StockDashboard", () => {
 
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
 
-    expect(
-      screen.getByRole("button", { name: "Refresh" }),
-    ).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled();
   });
 
   it("keeps other stocks available when one price request fails", async () => {
@@ -175,11 +174,9 @@ describe("StockDashboard", () => {
       screen.getByRole("img", { name: /Apple: 2 price points/ }),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /Microsoft/ }));
+    await user.click(screen.getByRole("button", { name: /^Microsoft/ }));
 
-    expect(
-      screen.getByText("Service unavailable"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Service unavailable")).toBeInTheDocument();
 
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
     expect(screen.getByRole("table")).toBeInTheDocument();
@@ -214,13 +211,13 @@ describe("StockDashboard", () => {
     await screen.findByText("US$120.00");
 
     const table = screen.getByRole("table");
-    const appleRow = within(table).getByRole("row", { name: /Apple/ });
+    const appleRow = within(table).getByRole("row", { name: /^Apple/ });
 
     expect(within(appleRow).getByText("US$120.00")).toBeInTheDocument();
     expect(within(appleRow).getByText("+20.00 %")).toBeInTheDocument();
 
     for (const route of [
-      "GET /stocks",
+      "GET /me/stocks",
       "GET /stocks/1/prices",
       "GET /stocks/2/prices",
     ]) {
@@ -262,7 +259,9 @@ describe("StockDashboard", () => {
 
     await user.click(screen.getByRole("button", { name: "Refresh" }));
 
-    expect(await screen.findByRole("button", { name: "Refresh" })).toBeEnabled();
+    expect(
+      await screen.findByRole("button", { name: "Refresh" }),
+    ).toBeEnabled();
     expect(screen.getByText("Apple rose over the period.")).toBeInTheDocument();
   });
 
@@ -272,7 +271,7 @@ describe("StockDashboard", () => {
 
     mockApi(
       createRoutes({
-        "GET /stocks": () => {
+        "GET /me/stocks": () => {
           stockRequests += 1;
 
           return stockRequests === 1
@@ -330,9 +329,9 @@ describe("StockDashboard", () => {
     renderDashboard();
 
     const table = await screen.findByRole("table");
-    const appleRow = within(table).getByRole("row", { name: /Apple/ });
+    const appleRow = within(table).getByRole("row", { name: /^Apple/ });
     const microsoftRow = within(table).getByRole("row", {
-      name: /Microsoft/,
+      name: /^Microsoft/,
     });
 
     const appleDayChange = within(appleRow).getByText("+2.50 %");
@@ -351,7 +350,7 @@ describe("StockDashboard", () => {
     renderDashboard();
 
     const table = await screen.findByRole("table");
-    const appleRow = within(table).getByRole("row", { name: /Apple/ });
+    const appleRow = within(table).getByRole("row", { name: /^Apple/ });
 
     expect(within(appleRow).getByText("—")).toHaveClass("text-gray-500");
   });
@@ -359,14 +358,16 @@ describe("StockDashboard", () => {
   it("shows an empty state when there are no stocks", async () => {
     mockApi(
       createRoutes({
-        "GET /stocks": () => [200, { stocks: [] }],
+        "GET /me/stocks": () => [200, { stocks: [] }],
       }),
     );
 
     renderDashboard();
 
     expect(
-      await screen.findByText("No tracked stocks yet."),
+      await screen.findByText(
+        "No tracked stocks yet. Add your first stock above.",
+      ),
     ).toBeInTheDocument();
 
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
@@ -388,5 +389,108 @@ describe("StockDashboard", () => {
 
     expect(screen.getByRole("table")).toBeInTheDocument();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  });
+
+  it("searches the catalog and follows a stock into an empty watchlist", async () => {
+    const user = userEvent.setup();
+
+    const requests = mockApi(
+      createRoutes({
+        "GET /me/stocks": () => [200, { stocks: [] }],
+        "POST /me/stocks": () => [201, { stock: stocks[0] }],
+      }),
+    );
+
+    renderDashboard();
+
+    await screen.findByText("No tracked stocks yet. Add your first stock above.");
+
+    await user.type(screen.getByRole("searchbox"), "aapl");
+
+    expect(
+      screen.queryByRole("button", { name: "Follow Microsoft (XNAS)" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Follow Apple (XNAS)" }),
+    );
+
+    const table = await screen.findByRole("table");
+    const appleRow = within(table).getByRole("row", { name: /^Apple/ });
+
+    expect(await within(appleRow).findByText("US$110.00")).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("button", { name: "Unfollow Apple (XNAS)" }),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.queryByRole("button", { name: "Follow Apple (XNAS)" }),
+    ).not.toBeInTheDocument();
+
+    expect(
+      requests.find((request) => request.route === "POST /me/stocks").body,
+    ).toEqual({ stockId: 1 });
+
+    // Following loads only the new stock's prices, not the whole watchlist.
+    expect(
+      requests.filter((request) => request.route === "GET /me/stocks"),
+    ).toHaveLength(1);
+  });
+
+  it("unfollows the selected stock and selects the remaining stock", async () => {
+    const user = userEvent.setup();
+
+    mockApi(
+      createRoutes({
+        "DELETE /me/stocks/1": () => [204],
+      }),
+    );
+
+    renderDashboard();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Unfollow Apple (XNAS)" }),
+    );
+
+    expect(
+      await screen.findByRole("button", { name: /^Microsoft/ }),
+    ).toHaveAttribute("aria-pressed", "true");
+
+    expect(
+      screen.queryByRole("button", { name: "Unfollow Apple (XNAS)" }),
+    ).not.toBeInTheDocument();
+
+    expect(
+      await screen.findByRole("button", { name: "Follow Apple (XNAS)" }),
+    ).toBeEnabled();
+  });
+
+  it("keeps the followed stock and shows an error when unfollowing fails", async () => {
+    const user = userEvent.setup();
+
+    mockApi(
+      createRoutes({
+        "DELETE /me/stocks/1": () => [500, { error: "Could not remove stock" }],
+      }),
+    );
+
+    renderDashboard();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Unfollow Apple (XNAS)" }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not remove stock",
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Unfollow Apple (XNAS)" }),
+    ).toBeEnabled();
+
+    expect(
+      screen.getByRole("img", { name: /Apple: 2 price points/ }),
+    ).toBeInTheDocument();
   });
 });
