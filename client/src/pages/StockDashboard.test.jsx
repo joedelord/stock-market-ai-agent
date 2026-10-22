@@ -405,6 +405,7 @@ describe("StockDashboard", () => {
 
     await screen.findByText("No tracked stocks yet. Add your first stock above.");
 
+    await user.click(screen.getByRole("button", { name: "Add to watchlist" }));
     await user.type(screen.getByRole("searchbox"), "aapl");
 
     expect(
@@ -461,9 +462,49 @@ describe("StockDashboard", () => {
       screen.queryByRole("button", { name: "Unfollow Apple (XNAS)" }),
     ).not.toBeInTheDocument();
 
+    await user.click(screen.getByRole("button", { name: "Add to watchlist" }));
+
     expect(
       await screen.findByRole("button", { name: "Follow Apple (XNAS)" }),
     ).toBeEnabled();
+  });
+
+  it("hides the add panel behind the plus button until it is opened", async () => {
+    const user = userEvent.setup();
+
+    const requests = mockApi(createRoutes());
+
+    renderDashboard();
+
+    const addButton = await screen.findByRole("button", {
+      name: "Add to watchlist",
+    });
+
+    expect(addButton).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+
+    // The catalog is only fetched once the panel is opened.
+    expect(
+      requests.some((request) => request.route === "GET /stocks"),
+    ).toBe(false);
+
+    await user.click(addButton);
+
+    expect(screen.getByRole("searchbox")).toHaveFocus();
+    expect(
+      screen.getByRole("button", { name: "Close add to watchlist" }),
+    ).toHaveAttribute("aria-expanded", "true");
+    // Both catalog stocks are already followed.
+    expect(
+      await screen.findByText("No matching stocks available to add."),
+    ).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Add to watchlist" }),
+    ).toHaveFocus();
   });
 
   it("keeps the followed stock and shows an error when unfollowing fails", async () => {

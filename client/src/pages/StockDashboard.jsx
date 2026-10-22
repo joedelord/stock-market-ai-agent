@@ -224,14 +224,6 @@ function StockDashboard() {
           </button>
         </header>
 
-        {loadedAt && (
-          <WatchlistPicker
-            stocks={stocks}
-            onAdd={handleAddStock}
-            disabled={isLoading || isSaving}
-          />
-        )}
-
         {watchlistError && (
           <p
             role="alert"
@@ -284,12 +276,21 @@ function StockDashboard() {
             )}
 
             <section aria-labelledby="stock-list-heading">
-              <h2
-                id="stock-list-heading"
-                className="mb-3 text-xl font-semibold text-gray-900"
-              >
-                Stocks
-              </h2>
+              {/* The picker's panel wraps onto its own line below this row. */}
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <h2
+                  id="stock-list-heading"
+                  className="text-xl font-semibold text-gray-900"
+                >
+                  Stocks
+                </h2>
+
+                <WatchlistPicker
+                  stocks={stocks}
+                  onAdd={handleAddStock}
+                  disabled={isLoading || isSaving}
+                />
+              </div>
 
               <StockList
                 stocks={stocks}
