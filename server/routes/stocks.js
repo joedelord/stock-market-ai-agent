@@ -7,6 +7,12 @@ const {
   getStockPrices,
 } = require("../controllers/stockController");
 
+const {
+  createStockAnalysis,
+} = require("../controllers/stockAnalysisController");
+
+const { requireAuth } = require("../middleware/authMiddleware");
+const { stockAnalysisLimiter } = require("../middleware/rateLimiters");
 const validate = require("../middleware/validate");
 
 const {
@@ -22,6 +28,14 @@ router.get("/", getStocks);
 router.get("/:id", validate(stockIdSchema), getStockById);
 
 router.get("/:id/prices", validate(stockPricesSchema), getStockPrices);
+
+router.post(
+  "/:id/analysis",
+  requireAuth,
+  stockAnalysisLimiter,
+  validate(stockIdSchema),
+  createStockAnalysis,
+);
 
 // POST has no authentication during development.
 // Protect it before release.

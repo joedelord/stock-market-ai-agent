@@ -22,3 +22,13 @@ export async function getStockPrices(id, { limit, signal } = {}) {
 
   return data;
 }
+
+export async function createStockAnalysis(id, { signal } = {}) {
+  const { data } = await api.post(
+    `/stocks/${encodeURIComponent(id)}/analysis`,
+    {},
+    { signal },
+  );
+
+  return data;
+}

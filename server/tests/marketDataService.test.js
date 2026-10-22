@@ -311,4 +311,71 @@ describe("Market Data Service", () => {
 
     expect(signal.aborted).toBe(true);
   });
+
+  describe("fetchStockQuote", () => {
+    // 2026-10-12T19:45:00Z as a Unix timestamp.
+    const QUOTE_TIMESTAMP = 1791834300;
+
+    const quoteData = (overrides = {}) => ({
+      symbol: "AAPL",
+      close: "341.06",
+      previous_close: "335.00",
+      timestamp: QUOTE_TIMESTAMP,
+      ...overrides,
+    });
+
+    test("fetches and normalizes a quote", async () => {
+      const fetchMock = vi.fn().mockResolvedValue(mockResponse(quoteData()));
+      vi.stubGlobal("fetch", fetchMock);
+
+      const quote = await marketDataService.fetchStockQuote({
+        symbol: "AAPL",
+        exchange: "XNAS",
+      });
+
+      expect(quote).toEqual({
+        priceTime: "2026-10-12T19:45:00.000Z",
+        close: 341.06,
+        previousClose: 335,
+      });
+
+      const parsedUrl = new URL(fetchMock.mock.calls[0][0]);
+
+      expect(parsedUrl.pathname).toBe("/quote");
+      expect(parsedUrl.searchParams.get("symbol")).toBe("AAPL");
+      expect(parsedUrl.searchParams.get("exchange")).toBe("NASDAQ");
+    });
+
+    test.each([
+      ["a zero previous close", { previous_close: "0" }],
+      ["a negative close", { close: "-1" }],
+      ["an empty close", { close: "" }],
+      ["a missing previous close", { previous_close: undefined }],
+      ["a non-numeric close", { close: "n/a" }],
+      ["a missing timestamp", { timestamp: undefined }],
+      ["a fractional timestamp", { timestamp: 1.5 }],
+    ])("rejects %s", async (_, overrides) => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(mockResponse(quoteData(overrides))),
+      );
+
+      await expect(
+        marketDataService.fetchStockQuote({ symbol: "AAPL", exchange: "XNAS" }),
+      ).rejects.toThrow("Invalid Twelve Data quote response");
+    });
+
+    test("passes on Twelve Data API errors", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          mockResponse({ status: "error", message: "Symbol not found" }),
+        ),
+      );
+
+      await expect(
+        marketDataService.fetchStockQuote({ symbol: "NOPE", exchange: "XNAS" }),
+      ).rejects.toThrow("Symbol not found");
+    });
+  });
 });

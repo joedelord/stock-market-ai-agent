@@ -33,24 +33,40 @@ function formatTime(value) {
   }).format(date);
 }
 
+function formatChange(value) {
+  if (value === null) return "—";
+
+  return `${value > 0 ? "+" : ""}${value.toLocaleString("en-GB", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} %`;
+}
+
+function getChangeColor(value) {
+  if (value === null || value === 0) return "text-gray-500";
+
+  return value > 0 ? "text-green-700" : "text-red-700";
+}
+
 function StockList({
   stocks,
   pricesByStockId = {},
   selectedStockId,
   onSelectStock,
+  quotesByStockId = {},
 }) {
   if (stocks.length === 0) {
-    return (
-      <p className="p-6 text-gray-500">No tracked stocks yet.</p>
-    );
+    return <p className="p-6 text-gray-500">No tracked stocks yet.</p>;
   }
 
   return (
     <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
       <table className="w-full text-left text-sm">
         <caption className="sr-only">
-          Stocks. The change is compared with the previous stored price.
-          Select a stock to see its chart.
+          Stocks. The 15 min change compares the two latest stored prices. The
+          day change compares the latest quote with the previous trading
+          day's close; its quote price and time are shown below it. Select a
+          stock to see its chart.
         </caption>
 
         <thead className="bg-gray-50 text-gray-600">
@@ -62,7 +78,10 @@ function StockList({
               Price
             </th>
             <th scope="col" className="px-4 py-3 text-right">
-              Change
+              15 min change
+            </th>
+            <th scope="col" className="px-4 py-3 text-right">
+              Day change
             </th>
             <th scope="col" className="px-4 py-3">
               Price time (Helsinki)
@@ -74,6 +93,8 @@ function StockList({
           {stocks.map((stock) => {
             const prices = pricesByStockId[stock.id] ?? [];
             const latest = prices.at(-1);
+            const quote = quotesByStockId[stock.id] ?? null;
+            const dayChange = toNumber(quote?.day_change_percent);
 
             // Compare prices from the same interval.
             const previous = latest
@@ -95,13 +116,6 @@ function StockList({
                 : null;
 
             const selected = selectedStockId === stock.id;
-
-            const changeColor =
-              change === null || change === 0
-                ? "text-gray-500"
-                : change > 0
-                  ? "text-green-700"
-                  : "text-red-700";
 
             return (
               <tr
@@ -129,17 +143,24 @@ function StockList({
                 </td>
 
                 <td
-                  className={`whitespace-nowrap px-4 py-3 text-right tabular-nums ${changeColor}`}
+                  className={`whitespace-nowrap px-4 py-3 text-right tabular-nums ${getChangeColor(change)}`}
                 >
-                  {change === null
-                    ? "—"
-                    : `${change > 0 ? "+" : ""}${change.toLocaleString(
-                        "en-GB",
-                        {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        },
-                      )} %`}
+                  {formatChange(change)}
+                </td>
+
+                <td
+                  className={`whitespace-nowrap px-4 py-3 text-right tabular-nums ${getChangeColor(dayChange)}`}
+                >
+                  {formatChange(dayChange)}
+
+                  {/* Visible rather than a tooltip, so touch and keyboard
+                      users can see which quote the change comes from. */}
+                  {quote && (
+                    <span className="mt-1 block text-xs font-normal text-gray-500">
+                      {formatPrice(quote.close, stock.currency)} ·{" "}
+                      {formatTime(quote.price_time)}
+                    </span>
+                  )}
                 </td>
 
                 <td className="whitespace-nowrap px-4 py-3 text-gray-500">

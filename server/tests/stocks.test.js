@@ -340,7 +340,32 @@ describe("Stocks API", () => {
         symbol: "AAPL",
       }),
       prices: [],
+      quote: null,
     });
+  });
+
+  test("returns the stored quote with its day change", async () => {
+    const created = await createStock();
+    const stockId = created.body.stock.id;
+
+    await stockModel.saveStockQuote(stockId, {
+      priceTime: "2026-10-12T19:45:00.000Z",
+      close: 110,
+      previousClose: 100,
+    });
+
+    const response = await request(app).get(`/api/stocks/${stockId}/prices`);
+
+    expect(response.status).toBe(200);
+
+    expect(response.body.quote).toMatchObject({
+      price_time: "2026-10-12T19:45:00.000Z",
+      close: "110.000000",
+      previous_close: "100.000000",
+    });
+
+    expect(Number(response.body.quote.day_change)).toBe(10);
+    expect(Number(response.body.quote.day_change_percent)).toBe(10);
   });
 });
 
@@ -453,5 +478,61 @@ describe("saveStockPrices", () => {
     );
 
     expect(savedCount).toBe(0);
+  });
+});
+
+describe("saveStockQuote", () => {
+  const QUOTE = {
+    priceTime: "2026-10-12T19:45:00.000Z",
+    close: 341.06,
+    previousClose: 335,
+  };
+
+  test("saves a quote and replaces it with a newer one", async () => {
+    const created = await createStock();
+    const stockId = created.body.stock.id;
+
+    await stockModel.saveStockQuote(stockId, QUOTE);
+
+    const saved = await stockModel.saveStockQuote(stockId, {
+      priceTime: "2026-10-12T20:00:00.000Z",
+      close: 342,
+      previousClose: 335,
+    });
+
+    expect(saved).toMatchObject({ close: "342.000000" });
+
+    const quote = await stockModel.getStockQuote(stockId);
+
+    expect(quote.price_time.toISOString()).toBe("2026-10-12T20:00:00.000Z");
+    expect(quote.close).toBe("342.000000");
+  });
+
+  test("does not overwrite a newer quote with an older one", async () => {
+    const created = await createStock();
+    const stockId = created.body.stock.id;
+
+    await stockModel.saveStockQuote(stockId, QUOTE);
+
+    const saved = await stockModel.saveStockQuote(stockId, {
+      priceTime: "2026-10-12T19:30:00.000Z",
+      close: 300,
+      previousClose: 335,
+    });
+
+    expect(saved).toBeUndefined();
+
+    const quote = await stockModel.getStockQuote(stockId);
+
+    expect(quote.price_time.toISOString()).toBe("2026-10-12T19:45:00.000Z");
+    expect(quote.close).toBe("341.060000");
+  });
+
+  test("returns undefined when the stock has no quote", async () => {
+    const created = await createStock();
+
+    const quote = await stockModel.getStockQuote(created.body.stock.id);
+
+    expect(quote).toBeUndefined();
   });
 });

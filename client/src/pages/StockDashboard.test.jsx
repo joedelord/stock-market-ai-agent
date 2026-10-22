@@ -25,18 +25,18 @@ const stocks = [
   },
 ];
 
-// The server returns the newest price first.
+// Oldest first, as the server returns them.
 function createPrices(previous, latest) {
   return [
-    {
-      price_time: "2026-10-19T13:45:00.000Z",
-      interval_code: "15min",
-      close: String(latest),
-    },
     {
       price_time: "2026-10-19T13:30:00.000Z",
       interval_code: "15min",
       close: String(previous),
+    },
+    {
+      price_time: "2026-10-19T13:45:00.000Z",
+      interval_code: "15min",
+      close: String(latest),
     },
   ];
 }
@@ -228,6 +228,132 @@ describe("StockDashboard", () => {
         requests.filter((request) => request.route === route),
       ).toHaveLength(2);
     }
+  });
+
+  it("keeps the AI analysis when prices are refreshed", async () => {
+    const user = userEvent.setup();
+
+    mockApi(
+      createRoutes({
+        "POST /stocks/1/analysis": () => [
+          200,
+          {
+            stock: stocks[0],
+            metrics: {
+              interval: "15min",
+              pointCount: 2,
+              periodStart: "2026-10-19T13:30:00.000Z",
+              periodEnd: "2026-10-19T13:45:00.000Z",
+            },
+            analysis: {
+              text: "Apple rose over the period.",
+              model: "test-model",
+              generatedAt: "2026-10-19T14:00:00.000Z",
+            },
+          },
+        ],
+      }),
+    );
+
+    renderDashboard();
+
+    await user.click(await screen.findByRole("button", { name: "Analyze" }));
+    await screen.findByText("Apple rose over the period.");
+
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+
+    expect(await screen.findByRole("button", { name: "Refresh" })).toBeEnabled();
+    expect(screen.getByText("Apple rose over the period.")).toBeInTheDocument();
+  });
+
+  it("keeps the loaded stocks when a refresh fails", async () => {
+    const user = userEvent.setup();
+    let stockRequests = 0;
+
+    mockApi(
+      createRoutes({
+        "GET /stocks": () => {
+          stockRequests += 1;
+
+          return stockRequests === 1
+            ? [200, { stocks }]
+            : [500, { error: "Internal server error" }];
+        },
+      }),
+    );
+
+    renderDashboard();
+
+    await screen.findByRole("table");
+
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Internal server error",
+    );
+
+    expect(screen.getByRole("table")).toBeInTheDocument();
+  });
+
+  it("shows the day change from the stored quote", async () => {
+    mockApi(
+      createRoutes({
+        "GET /stocks/1/prices": () => [
+          200,
+          {
+            stock: stocks[0],
+            prices: createPrices(100, 110),
+            quote: {
+              price_time: "2026-10-19T13:45:00.000Z",
+              close: "102.500000",
+              previous_close: "100.000000",
+              day_change_percent: "2.5000000000000000",
+            },
+          },
+        ],
+        "GET /stocks/2/prices": () => [
+          200,
+          {
+            stock: stocks[1],
+            prices: createPrices(200, 190),
+            quote: {
+              price_time: "2026-10-19T13:45:00.000Z",
+              close: "196.000000",
+              previous_close: "200.000000",
+              day_change_percent: "-2.0000000000000000",
+            },
+          },
+        ],
+      }),
+    );
+
+    renderDashboard();
+
+    const table = await screen.findByRole("table");
+    const appleRow = within(table).getByRole("row", { name: /Apple/ });
+    const microsoftRow = within(table).getByRole("row", {
+      name: /Microsoft/,
+    });
+
+    const appleDayChange = within(appleRow).getByText("+2.50 %");
+
+    expect(appleDayChange).toHaveClass("text-green-700");
+    expect(appleDayChange).toHaveTextContent("US$102.50 · 19/10/2026, 16:45");
+
+    expect(within(microsoftRow).getByText("-2.00 %")).toHaveClass(
+      "text-red-700",
+    );
+  });
+
+  it("shows a dash when a stock has no quote yet", async () => {
+    mockApi(createRoutes());
+
+    renderDashboard();
+
+    const table = await screen.findByRole("table");
+    const appleRow = within(table).getByRole("row", { name: /Apple/ });
+
+    expect(within(appleRow).getByText("—")).toHaveClass("text-gray-500");
   });
 
   it("shows an empty state when there are no stocks", async () => {
