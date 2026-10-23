@@ -76,11 +76,26 @@ const createMarketScheduler = ({
         logger.warn({ symbol, exchange, error }, "Price update failed");
       }
 
+      for (const { symbol, exchange, alertError } of results) {
+        if (alertError) {
+          logger.warn(
+            { symbol, exchange, error: alertError },
+            "Alert check failed",
+          );
+        }
+      }
+
+      const alertsTriggered = results.reduce(
+        (total, result) => total + (result.alertsTriggered ?? 0),
+        0,
+      );
+
       logger.info(
         {
           exchanges,
           updated: results.length - failed.length,
           failed: failed.length,
+          alertsTriggered,
         },
         "Stock prices updated",
       );

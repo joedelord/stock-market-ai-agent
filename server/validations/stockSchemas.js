@@ -1,9 +1,8 @@
 const { z } = require("zod");
 
-const stockIdField = z.coerce
-  .number({ error: "Stock ID must be a positive integer" })
-  .int("Stock ID must be a positive integer")
-  .positive("Stock ID must be a positive integer");
+const { createIdField } = require("./commonFields");
+
+const stockIdField = createIdField("Stock ID");
 
 const createStockSchema = z.object({
   body: z

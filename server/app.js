@@ -10,6 +10,8 @@ const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/users");
 const stockRoutes = require("./routes/stocks");
 const watchlistRoutes = require("./routes/watchlist");
+const alertRoutes = require("./routes/alerts");
+const notificationRoutes = require("./routes/notifications");
 
 const errorHandler = require("./middleware/errorHandler");
 
@@ -55,6 +57,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/stocks", stockRoutes);
 app.use("/api/me/stocks", watchlistRoutes);
+app.use("/api/alerts", alertRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 app.use((req, res) => {
   res.status(404).json({

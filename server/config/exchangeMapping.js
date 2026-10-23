@@ -5,6 +5,18 @@ const PROVIDER_EXCHANGES = {
   XNYS: "NYSE",
 };
 
+// Market days, for example for daily alerts, follow the exchange's local date.
+const EXCHANGE_TIME_ZONES = {
+  XHEL: "Europe/Helsinki",
+  XNAS: "America/New_York",
+  XNYS: "America/New_York",
+};
+
+const DEFAULT_TIME_ZONE = "UTC";
+
+const getExchangeTimeZone = (exchange) =>
+  EXCHANGE_TIME_ZONES[exchange] ?? DEFAULT_TIME_ZONE;
+
 const getProviderExchange = (exchange) => {
   const providerExchange = PROVIDER_EXCHANGES[exchange];
 
@@ -16,5 +28,6 @@ const getProviderExchange = (exchange) => {
 };
 
 module.exports = {
+  getExchangeTimeZone,
   getProviderExchange,
 };

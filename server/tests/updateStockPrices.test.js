@@ -1,5 +1,6 @@
 const stockModel = require("../models/stockModel");
 const marketDataService = require("../services/marketDataService");
+const alertService = require("../services/alertService");
 
 const { updateStockPrices } = require("../jobs/updateStockPrices");
 
@@ -53,7 +54,7 @@ const storedQuote = (ageMs) => ({
 
 describe("Update Stock Prices Job", () => {
   beforeEach(() => {
-    vi.spyOn(stockModel, "getFollowedStocks").mockResolvedValue(stocks);
+    vi.spyOn(stockModel, "getTrackedStocks").mockResolvedValue(stocks);
 
     vi.spyOn(marketDataService, "fetchStockPrices").mockResolvedValue(
       sampleData,
@@ -70,6 +71,8 @@ describe("Update Stock Prices Job", () => {
     vi.spyOn(stockModel, "saveStockQuote").mockResolvedValue({
       stock_id: 1,
     });
+
+    vi.spyOn(alertService, "checkStockAlerts").mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -197,7 +200,7 @@ describe("Update Stock Prices Job", () => {
   });
 
   test("returns empty array when no stocks exist", async () => {
-    stockModel.getFollowedStocks.mockResolvedValue([]);
+    stockModel.getTrackedStocks.mockResolvedValue([]);
 
     const results = await updateStockPrices({ delayMs: 0 });
 
@@ -216,7 +219,7 @@ describe("Update Stock Prices Job", () => {
     });
 
     expect(results).toEqual([]);
-    expect(stockModel.getFollowedStocks).not.toHaveBeenCalled();
+    expect(stockModel.getTrackedStocks).not.toHaveBeenCalled();
   });
 
   test("stops before the next stock after abort", async () => {
@@ -348,6 +351,7 @@ describe("Update Stock Prices Job", () => {
       status: "success",
       saved: 1,
       quoteSaved: false,
+      alertsTriggered: 0,
     });
   });
 
@@ -396,5 +400,48 @@ describe("Update Stock Prices Job", () => {
     });
 
     expect(marketDataService.fetchStockQuote).not.toHaveBeenCalled();
+  });
+
+  test("checks alerts for each stock and reports the triggered count", async () => {
+    alertService.checkStockAlerts.mockResolvedValueOnce([{ id: 1 }, { id: 2 }]);
+
+    const results = await updateStockPrices({
+      delayMs: 0,
+      exchanges: ["XNAS"],
+    });
+
+    expect(alertService.checkStockAlerts).toHaveBeenCalledWith(stocks[0]);
+    expect(results[0].alertsTriggered).toBe(2);
+  });
+
+  test("checks alerts even when the price request fails", async () => {
+    marketDataService.fetchStockPrices.mockRejectedValueOnce(
+      new Error("API down"),
+    );
+
+    const results = await updateStockPrices({
+      delayMs: 0,
+      exchanges: ["XNAS"],
+    });
+
+    expect(results[0].status).toBe("error");
+    expect(alertService.checkStockAlerts).toHaveBeenCalledTimes(1);
+  });
+
+  test("reports an alert check failure without failing the update", async () => {
+    alertService.checkStockAlerts.mockRejectedValueOnce(
+      new Error("Alert check failed"),
+    );
+
+    const results = await updateStockPrices({
+      delayMs: 0,
+      exchanges: ["XNAS"],
+    });
+
+    expect(results[0]).toMatchObject({
+      status: "success",
+      saved: 1,
+      alertError: "Alert check failed",
+    });
   });
 });

@@ -78,7 +78,7 @@ describe("Watchlist API", () => {
 
   test("starts empty even when the shared catalog contains stocks", async () => {
     expect(await getStockIds(alice)).toEqual([]);
-    expect(await stockModel.getFollowedStocks()).toEqual([]);
+    expect(await stockModel.getTrackedStocks()).toEqual([]);
   });
 
   test("follows a stock and returns it", async () => {
@@ -146,7 +146,7 @@ describe("Watchlist API", () => {
     await follow(bob, apple);
 
     const getFollowedIds = async () =>
-      (await stockModel.getFollowedStocks()).map((stock) => stock.id);
+      (await stockModel.getTrackedStocks()).map((stock) => stock.id);
 
     expect(await getFollowedIds()).toEqual([apple.id]);
 
@@ -190,7 +190,7 @@ describe("Watchlist API", () => {
 
     expect(response.status).toBe(404);
     expect(response.body).toEqual({ error: "Active stock not found" });
-    expect(await stockModel.getFollowedStocks()).toEqual([]);
+    expect(await stockModel.getTrackedStocks()).toEqual([]);
   });
 
   test("removes a deleted user's follows but keeps the stock", async () => {

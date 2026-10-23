@@ -2,6 +2,7 @@ const { setTimeout: wait } = require("timers/promises");
 
 const stockModel = require("../models/stockModel");
 const marketDataService = require("../services/marketDataService");
+const alertService = require("../services/alertService");
 
 const INTERVAL = "15min";
 const OUTPUT_SIZE = 5;
@@ -14,7 +15,7 @@ const isQuoteFresh = (quote) =>
   Boolean(quote) &&
   Date.now() - new Date(quote.fetched_at).getTime() < QUOTE_MAX_AGE_MS;
 
-// exchanges is optional: manual updates process followed active stocks on every exchange.
+// exchanges is optional: manual updates process tracked active stocks on every exchange.
 
 const updateStockPrices = async ({
   delayMs = REQUEST_DELAY_MS,
@@ -23,7 +24,7 @@ const updateStockPrices = async ({
 } = {}) => {
   if (signal?.aborted) return [];
 
-  const stocks = await stockModel.getFollowedStocks();
+  const stocks = await stockModel.getTrackedStocks();
 
   const activeStocks = stocks.filter(
     (stock) =>
@@ -107,6 +108,16 @@ const updateStockPrices = async ({
       }
 
       result.quoteError = error.message;
+    }
+
+    // Runs even when this run's fetches failed, since stored prices may
+    // still meet a newly created alert. Alert errors don't fail the update.
+    try {
+      const notifications = await alertService.checkStockAlerts(stock);
+
+      result.alertsTriggered = notifications.length;
+    } catch (error) {
+      result.alertError = error.message;
     }
 
     results.push(result);
