@@ -9,6 +9,7 @@ const requestLogger = require("./middleware/requestLogger");
 const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/users");
 const stockRoutes = require("./routes/stocks");
+const watchlistRoutes = require("./routes/watchlist");
 
 const errorHandler = require("./middleware/errorHandler");
 
@@ -53,6 +54,7 @@ app.get("/api/health", async (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/stocks", stockRoutes);
+app.use("/api/me/stocks", watchlistRoutes);
 
 app.use((req, res) => {
   res.status(404).json({

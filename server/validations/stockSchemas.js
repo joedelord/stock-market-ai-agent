@@ -1,8 +1,8 @@
 const { z } = require("zod");
 
 const stockIdField = z.coerce
-  .number()
-  .int()
+  .number({ error: "Stock ID must be a positive integer" })
+  .int("Stock ID must be a positive integer")
   .positive("Stock ID must be a positive integer");
 
 const createStockSchema = z.object({
@@ -61,6 +61,7 @@ const stockPricesSchema = z.object({
 });
 
 module.exports = {
+  stockIdField,
   createStockSchema,
   stockIdSchema,
   stockPricesSchema,

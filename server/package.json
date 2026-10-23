@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "market:once": "node scripts/updatePrices.js",
-    "market:watch": "node scripts/startMarketScheduler.js"
+    "market:watch": "node scripts/startMarketScheduler.js",
+    "seed:mock": "node scripts/seedMockData.js"
   },
   "keywords": [],
   "author": "",

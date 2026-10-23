@@ -4,10 +4,24 @@ import { Link } from "react-router";
 import StockList from "../components/StockList";
 import StockChart from "../components/StockChart";
 import StockAnalysis from "../components/StockAnalysis";
+import WatchlistPicker from "../components/WatchlistPicker";
 import { getErrorMessage } from "../services/errors";
-import { getStocks, getStockPrices } from "../services/stockService";
+import {
+  getWatchlistStocks,
+  getStockPrices,
+  createWatchlistStock,
+  deleteWatchlistStock,
+} from "../services/stockService";
 
 const PRICE_LIMIT = 100;
+
+// Sort by time so the list and chart don't depend on the order the server
+// returns.
+function sortByTime(prices) {
+  return [...prices].sort(
+    (a, b) => new Date(a.price_time) - new Date(b.price_time),
+  );
+}
 
 function StockDashboard() {
   const [stocks, setStocks] = useState([]);
@@ -21,13 +35,16 @@ function StockDashboard() {
   const [loadedAt, setLoadedAt] = useState(null);
   const [reloadCount, setReloadCount] = useState(0);
 
+  const [isSaving, setIsSaving] = useState(false);
+  const [watchlistError, setWatchlistError] = useState("");
+
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
 
     async function loadStocks() {
       try {
-        const stockList = await getStocks({ signal });
+        const stockList = await getWatchlistStocks({ signal });
 
         const results = await Promise.allSettled(
           stockList.map((stock) =>
@@ -48,11 +65,7 @@ function StockDashboard() {
           const stockId = stockList[index].id;
 
           if (result.status === "fulfilled") {
-            // Sort by time so the list and chart don't depend on the order
-            // the server returns.
-            nextPrices[stockId] = [...result.value.prices].sort(
-              (a, b) => new Date(a.price_time) - new Date(b.price_time),
-            );
+            nextPrices[stockId] = sortByTime(result.value.prices);
 
             nextQuotes[stockId] = result.value.quote ?? null;
           } else {
@@ -97,6 +110,84 @@ function StockDashboard() {
     setReloadCount((count) => count + 1);
   };
 
+  // Only the new stock's prices are loaded, so a follow doesn't reload
+  // every stock or reset a running analysis.
+  const loadPricesForStock = async (stockId) => {
+    try {
+      const { prices, quote } = await getStockPrices(stockId, {
+        limit: PRICE_LIMIT,
+      });
+
+      setPricesByStockId((current) => ({
+        ...current,
+        [stockId]: sortByTime(prices),
+      }));
+
+      setQuotesByStockId((current) => ({
+        ...current,
+        [stockId]: quote ?? null,
+      }));
+
+      setPriceErrors((current) => {
+        const next = { ...current };
+        delete next[stockId];
+
+        return next;
+      });
+    } catch (error) {
+      setPriceErrors((current) => ({
+        ...current,
+        [stockId]: getErrorMessage(error, "Failed to load prices"),
+      }));
+    }
+  };
+
+  const handleAddStock = async (stockId) => {
+    setIsSaving(true);
+    setWatchlistError("");
+
+    try {
+      const stock = await createWatchlistStock(stockId);
+
+      setStocks((current) =>
+        current.some((item) => item.id === stock.id)
+          ? current
+          : [...current, stock].sort((a, b) => a.name.localeCompare(b.name)),
+      );
+
+      setSelectedStockId((currentId) => currentId ?? stock.id);
+
+      await loadPricesForStock(stock.id);
+    } catch (error) {
+      setWatchlistError(getErrorMessage(error, "Failed to follow stock"));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleRemoveStock = async (stockId) => {
+    setIsSaving(true);
+    setWatchlistError("");
+
+    try {
+      await deleteWatchlistStock(stockId);
+
+      // The buttons are disabled while saving, so stocks can't change
+      // between the click and this update.
+      const remaining = stocks.filter((stock) => stock.id !== stockId);
+
+      setStocks(remaining);
+
+      setSelectedStockId((currentId) =>
+        currentId === stockId ? (remaining[0]?.id ?? null) : currentId,
+      );
+    } catch (error) {
+      setWatchlistError(getErrorMessage(error, "Failed to unfollow stock"));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const selectedStock =
     stocks.find((stock) => stock.id === selectedStockId) ?? null;
 
@@ -114,22 +205,33 @@ function StockDashboard() {
               ← Back to dashboard
             </Link>
 
-            <h1 className="mt-3 text-3xl font-bold text-gray-900">Stocks</h1>
+            <h1 className="mt-3 text-3xl font-bold text-gray-900">
+              My watchlist
+            </h1>
 
             <p className="mt-2 text-sm text-gray-600">
-              Tracked stocks and their stored price history.
+              Your followed stocks and their shared price history.
             </p>
           </div>
 
           <button
             type="button"
             onClick={handleRefresh}
-            disabled={isLoading}
+            disabled={isLoading || isSaving}
             className="rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 disabled:cursor-wait disabled:opacity-50"
           >
             {isLoading ? "Loading..." : "Refresh"}
           </button>
         </header>
+
+        {watchlistError && (
+          <p
+            role="alert"
+            className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800"
+          >
+            {watchlistError}
+          </p>
+        )}
 
         {loadedAt && (
           <p className="text-sm text-gray-500">
@@ -174,12 +276,21 @@ function StockDashboard() {
             )}
 
             <section aria-labelledby="stock-list-heading">
-              <h2
-                id="stock-list-heading"
-                className="mb-3 text-xl font-semibold text-gray-900"
-              >
-                Stocks
-              </h2>
+              {/* The picker's panel wraps onto its own line below this row. */}
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <h2
+                  id="stock-list-heading"
+                  className="text-xl font-semibold text-gray-900"
+                >
+                  Stocks
+                </h2>
+
+                <WatchlistPicker
+                  stocks={stocks}
+                  onAdd={handleAddStock}
+                  disabled={isLoading || isSaving}
+                />
+              </div>
 
               <StockList
                 stocks={stocks}
@@ -187,6 +298,8 @@ function StockDashboard() {
                 quotesByStockId={quotesByStockId}
                 selectedStockId={selectedStockId}
                 onSelectStock={setSelectedStockId}
+                onRemoveStock={handleRemoveStock}
+                disabled={isLoading || isSaving}
               />
 
               <p className="mt-2 text-xs text-gray-500">

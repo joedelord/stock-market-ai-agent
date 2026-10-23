@@ -92,8 +92,9 @@ describe("Groq Service", () => {
     const body = JSON.parse(options.body);
 
     expect(body.model).toBe("test-model");
-    expect(body.max_completion_tokens).toBe(2000);
+    expect(body.max_completion_tokens).toBe(500);
     expect(body.temperature).toBe(0.2);
+    expect(body).not.toHaveProperty("reasoning_effort");
     expect(body.messages[0].role).toBe("system");
     expect(body.messages[1].role).toBe("user");
 
@@ -146,6 +147,45 @@ describe("Groq Service", () => {
       expose: true,
       message: "AI analysis is temporarily busy. Please try again later.",
     });
+  });
+
+  test("sends the configured reasoning effort", async () => {
+    vi.stubEnv("GROQ_REASONING_EFFORT", "none");
+    fetchMock.mockResolvedValue(successfulResponse());
+
+    await generateStockAnalysis({ stock, metrics });
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+
+    expect(body.reasoning_effort).toBe("none");
+  });
+
+  test("reports requests too large for the provider's limits as configuration errors", async () => {
+    const detail =
+      "Request too large for model `test-model` on output tokens per minute (OTPM): Limit 1000, Requested 2000.";
+
+    fetchMock.mockResolvedValue(
+      failedResponse(429, {
+        headers: { "retry-after": "12" },
+        errorBody: { error: { message: detail } },
+      }),
+    );
+
+    const error = await generateStockAnalysis({ stock, metrics }).catch(
+      (caught) => caught,
+    );
+
+    expect(error).toMatchObject({
+      status: 503,
+      expose: true,
+      message: "AI analysis is not available with the current configuration.",
+      cause: expect.objectContaining({
+        message: `Groq responded with HTTP 429: ${detail}`,
+      }),
+    });
+
+    // Retrying cannot help, so clients are not told to wait and retry.
+    expect(error.retryAfter).toBeUndefined();
   });
 
   test("keeps the provider's error message for the logs", async () => {
