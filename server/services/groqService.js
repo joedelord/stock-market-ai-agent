@@ -2,9 +2,11 @@ const HttpError = require("../utils/httpError");
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const REQUEST_TIMEOUT_MS = 30_000;
-// Reasoning models count their hidden reasoning in this limit, so leave room
-// beyond the ~350 tokens a 250-word answer needs.
-const MAX_COMPLETION_TOKENS = 2000;
+// Groq checks this requested maximum against the output tokens per minute
+// limit (1000 on the free tier), so 500 leaves room for two requests a
+// minute. A 250-word answer needs ~350. Reasoning tokens also count here,
+// so set GROQ_REASONING_EFFORT=none for models that support it.
+const MAX_COMPLETION_TOKENS = 500;
 // Low temperature: the output is a factual summary, variety adds nothing.
 const TEMPERATURE = 0.2;
 
@@ -47,6 +49,10 @@ const readErrorMessage = async (response) => {
   }
 };
 
+// A 429 that no retry can fix: the request alone exceeds a per-minute limit.
+const isRequestTooLarge = (detail) =>
+  typeof detail === "string" && detail.includes("Request too large");
+
 const isTimeout = (error) =>
   error.name === "TimeoutError" || error.name === "AbortError";
 
@@ -65,6 +71,8 @@ const incompleteResponseError = (cause) =>
 const generateStockAnalysis = async ({ stock, metrics }) => {
   const apiKey = process.env.GROQ_API_KEY?.trim();
   const model = process.env.GROQ_MODEL?.trim();
+  // Optional, because the allowed values differ between models.
+  const reasoningEffort = process.env.GROQ_REASONING_EFFORT?.trim();
 
   if (!apiKey || !model) {
     throw new HttpError(SERVICE_UNAVAILABLE, "AI analysis is not configured.");
@@ -92,6 +100,7 @@ const generateStockAnalysis = async ({ stock, metrics }) => {
     ],
     max_completion_tokens: MAX_COMPLETION_TOKENS,
     temperature: TEMPERATURE,
+    ...(reasoningEffort && { reasoning_effort: reasoningEffort }),
   };
 
   let response;
@@ -126,6 +135,14 @@ const generateStockAnalysis = async ({ stock, metrics }) => {
     const cause = new Error(
       `Groq responded with HTTP ${response.status}${detail ? `: ${detail}` : ""}`,
     );
+
+    if (response.status === TOO_MANY_REQUESTS && isRequestTooLarge(detail)) {
+      throw new HttpError(
+        SERVICE_UNAVAILABLE,
+        "AI analysis is not available with the current configuration.",
+        { cause },
+      );
+    }
 
     if (response.status === TOO_MANY_REQUESTS) {
       const error = new HttpError(
