@@ -4,6 +4,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import RoleRoute from "./components/RoleRoute";
 
 import Admin from "./pages/Admin";
+import Alerts from "./pages/Alerts";
 import ChangePassword from "./pages/ChangePassword";
 import Dashboard from "./pages/Dashboard";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -33,6 +34,8 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
 
           <Route path="/stocks" element={<StockDashboard />} />
+
+          <Route path="/alerts" element={<Alerts />} />
 
           <Route path="/account/password" element={<ChangePassword />} />
         </Route>
