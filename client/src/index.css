@@ -32,3 +32,52 @@
     cursor: pointer;
   }
 }
+
+/* Workspace navigation and watchlist. Existing account pages keep their layout. */
+.app-shell { min-height: 100vh; background: #f5f7fb; }
+.app-header { background: #101e36; color: #fff; }
+.app-header-inner { max-width: 1280px; margin: auto; padding: 18px 32px; display: flex; align-items: center; gap: 32px; flex-wrap: wrap; }
+.app-brand { display: flex; align-items: center; gap: 9px; font-weight: 750; white-space: nowrap; }
+.brand-mark { background: #3b82f6; border-radius: 9px; padding: 2px 9px; font-size: 22px; }
+.brand-tag { color: #93c5fd; font-size: 12px; border: 1px solid #435575; border-radius: 5px; padding: 2px 5px; }
+.app-nav { display: flex; gap: 6px; }
+.app-nav a { padding: 9px 13px; border-radius: 8px; color: #c2cde0; font-size: 14px; }
+.app-nav a:hover, .app-nav a[aria-current="page"] { background: #263752; color: white; }
+.app-user-actions { margin-left: auto; display: flex; align-items: center; gap: 12px; color: #111827; }
+.account-menu { position: relative; color: white; font-size: 14px; }
+.account-menu summary { cursor: pointer; padding: 10px; border: 1px solid #435575; border-radius: 8px; }
+.account-panel { position: absolute; right: 0; top: calc(100% + 10px); z-index: 30; min-width: 210px; padding: 8px; border-radius: 12px; background: white; color: #1e293b; box-shadow: 0 12px 36px #0f172a26; border: 1px solid #e2e8f0; }
+.account-panel a, .account-panel button { display: block; width: 100%; text-align: left; padding: 10px; border-radius: 6px; }
+.account-panel a:hover, .account-panel button:hover { background: #eff6ff; }
+.app-footer { padding: 28px 16px; text-align: center; font-size: 12px; color: #64748b; }
+.skip-link { position: absolute; top: -100px; left: 16px; z-index: 50; background: white; color: #101e36; padding: 12px; }
+.skip-link:focus { top: 8px; }
+.workspace-eyebrow { font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: .12em; }
+.stock-workspace { min-height: 75vh; }
+.watchlist-layout { display: grid; grid-template-columns: minmax(0, 390px) minmax(0, 1fr); gap: 24px; align-items: start; }
+.watchlist-panel, .stock-detail-panel { min-width: 0; }
+.stock-detail-panel { display: grid; gap: 18px; }
+.stock-count { display: inline-block; margin-left: 6px; padding: 2px 8px; background: #e2e8f0; color: #475569; border-radius: 20px; font-size: 12px; vertical-align: middle; }
+.watchlist-table table, .watchlist-table tbody { display: block; }
+.watchlist-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.watchlist-table .stock-row { display: grid; grid-template-columns: 1fr 1fr; padding: 14px; gap: 8px 12px; border-left: 3px solid transparent; }
+.watchlist-table .stock-row.bg-blue-50 { border-left-color: #2563eb; }
+.watchlist-table td { display: block; padding: 0; white-space: normal; font-size: 13px; }
+.watchlist-table td:first-child { grid-column: 1 / -1; padding-bottom: 5px; }
+.watchlist-table td:first-child button { width: 100%; }
+.watchlist-table td[data-label] { text-align: left; }
+.watchlist-table td[data-label]::before { content: attr(data-label); display: block; color: #64748b; font-size: 10px; font-weight: 600; margin-bottom: 3px; }
+.watchlist-table td[data-label="Price time · Helsinki"] { font-size: 11px; }
+.watchlist-table td:last-child:not([data-label]) { text-align: right; align-self: end; }
+.empty-stock-detail { border: 1px dashed #cbd5e1; background: white; border-radius: 16px; padding: 70px 28px; text-align: center; color: #64748b; }
+.empty-stock-detail > span { display: block; color: #2563eb; font-size: 36px; }
+.empty-stock-detail h2 { font-size: 22px; font-weight: 700; color: #1e293b; margin: 12px 0; }
+:focus-visible { outline: 2px solid #3b82f6; outline-offset: 3px; }
+@media (max-width: 1023.98px) { .watchlist-layout { grid-template-columns: minmax(0, 310px) minmax(0, 1fr); gap: 16px; } .app-header-inner { gap: 16px; padding: 16px; } }
+@media (max-width: 767.98px) { .watchlist-layout { grid-template-columns: minmax(0, 1fr); } .app-nav { order: 3; width: 100%; } .app-user-actions { gap: 6px; } .app-brand { font-size: 14px; } .app-header-inner { gap: 12px; } .account-menu summary { max-width: 130px; overflow-wrap: anywhere; } }
+
+@media (max-width: 639.98px) {
+  .app-user-actions .notification-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .app-user-actions > div > button { padding: 10px; }
+  .app-user-actions > div > section { position: fixed; left: 16px; right: 16px; top: 74px; width: auto; max-height: calc(100dvh - 100px); overflow-y: auto; }
+}

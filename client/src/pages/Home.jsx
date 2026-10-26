@@ -10,8 +10,8 @@ function Home() {
       <h1 className="text-4xl font-bold mb-5">Stock Market App</h1>
 
       {isAuthenticated ? (
-        <ButtonLink to="/dashboard" className="text-xl block w-fit mx-auto">
-          Open dashboard
+        <ButtonLink to="/stocks" className="text-xl block w-fit mx-auto">
+          Open my stocks
         </ButtonLink>
       ) : (
         <div className="flex justify-center gap-3">

@@ -66,7 +66,7 @@ function StockList({
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+    <div className="watchlist-table overflow-x-auto rounded-xl border border-gray-200 bg-white">
       <table className="w-full text-left text-sm">
         <caption className="sr-only">
           Stocks. The 15 min change compares the two latest stored prices. The
@@ -131,7 +131,7 @@ function StockList({
             return (
               <tr
                 key={stock.id}
-                className={selected ? "bg-blue-50" : "hover:bg-gray-50"}
+                className={selected ? "stock-row bg-blue-50" : "stock-row hover:bg-gray-50"}
               >
                 <td className="px-4 py-3">
                   <button
@@ -149,18 +149,18 @@ function StockList({
                   </button>
                 </td>
 
-                <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums">
+                <td data-label="Price" className="whitespace-nowrap px-4 py-3 text-right tabular-nums">
                   {formatPrice(latest?.close, stock.currency)}
                 </td>
 
                 <td
-                  className={`whitespace-nowrap px-4 py-3 text-right tabular-nums ${getChangeColor(change)}`}
+                  data-label="15 min" className={`whitespace-nowrap px-4 py-3 text-right tabular-nums ${getChangeColor(change)}`}
                 >
                   {formatChange(change)}
                 </td>
 
                 <td
-                  className={`whitespace-nowrap px-4 py-3 text-right tabular-nums ${getChangeColor(dayChange)}`}
+                  data-label="Day" className={`whitespace-nowrap px-4 py-3 text-right tabular-nums ${getChangeColor(dayChange)}`}
                 >
                   {formatChange(dayChange)}
 
@@ -174,7 +174,7 @@ function StockList({
                   )}
                 </td>
 
-                <td className="whitespace-nowrap px-4 py-3 text-gray-500">
+                <td data-label="Price time · Helsinki" className="whitespace-nowrap px-4 py-3 text-gray-500">
                   {formatTime(latest?.price_time)}
                 </td>
                 {onRemoveStock && (

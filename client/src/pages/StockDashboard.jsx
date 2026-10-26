@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
-import NotificationCenter from "../components/NotificationCenter";
 import StockList from "../components/StockList";
 import StockChart from "../components/StockChart";
 import StockAnalysis from "../components/StockAnalysis";
@@ -195,23 +194,17 @@ function StockDashboard() {
   const failedStocks = stocks.filter((stock) => priceErrors[stock.id]);
 
   return (
-    <main className="min-h-screen bg-gray-100 px-4 py-8 sm:px-8">
-      <div className="mx-auto max-w-6xl space-y-6">
+    <main id="main-content" className="stock-workspace px-4 py-8 sm:px-8">
+      <div className="mx-auto max-w-7xl space-y-6">
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <Link
-              to="/dashboard"
-              className="text-sm text-blue-700 underline hover:text-blue-900"
-            >
-              ← Back to dashboard
-            </Link>
-
+            <p className="workspace-eyebrow">YOUR WORKSPACE</p>
             <h1 className="mt-3 text-3xl font-bold text-gray-900">
               My watchlist
             </h1>
 
             <p className="mt-2 text-sm text-gray-600">
-              Your followed stocks and their shared price history.
+              Follow the moves. Explore the details. Stay informed.
             </p>
           </div>
 
@@ -222,7 +215,6 @@ function StockDashboard() {
             >
               My alerts
             </Link>
-            <NotificationCenter />
             <button
               type="button"
               onClick={handleRefresh}
@@ -285,14 +277,15 @@ function StockDashboard() {
               </p>
             )}
 
-            <section aria-labelledby="stock-list-heading">
+            <div className="watchlist-layout">
+            <section aria-labelledby="stock-list-heading" className="watchlist-panel">
               {/* The picker's panel wraps onto its own line below this row. */}
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <h2
                   id="stock-list-heading"
                   className="text-xl font-semibold text-gray-900"
                 >
-                  Stocks
+                  Stocks <span className="stock-count">{stocks.length}</span>
                 </h2>
 
                 <WatchlistPicker
@@ -321,12 +314,11 @@ function StockDashboard() {
               </p>
             </section>
 
-            {selectedStock && (
+            <div className="stock-detail-panel">
+            {selectedStock ? (
               <>
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h2 className="text-xl font-semibold">
-                    {selectedStock.name}
-                  </h2>
+                  <p className="workspace-eyebrow">STOCK OVERVIEW · {selectedStock.symbol}</p>
                   <Link
                     to={`/alerts?stockId=${encodeURIComponent(selectedStock.id)}`}
                     className="rounded-lg bg-blue-600 px-4 py-2 text-white"
@@ -342,7 +334,11 @@ function StockDashboard() {
 
                 <StockAnalysis key={selectedStock.id} stock={selectedStock} />
               </>
+            ) : (
+              <div className="empty-stock-detail"><span aria-hidden="true">↗</span><h2>Build your market view</h2><p>Add a stock to your watchlist to explore its chart, create alerts and generate an AI analysis.</p></div>
             )}
+            </div>
+            </div>
           </>
         )}
       </div>

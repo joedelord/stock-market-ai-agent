@@ -14,12 +14,17 @@ function Login() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const from = location.state?.from;
+  const destination = from?.pathname
+    ? `${from.pathname}${from.search || ""}${from.hash || ""}`
+    : "/stocks";
+
   if (isLoading) {
     return <p>Loading...</p>;
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={destination} replace />;
   }
 
   const handleLogin = async (email, password) => {
@@ -28,8 +33,6 @@ function Login() {
 
     try {
       await login(email, password);
-
-      const destination = location.state?.from?.pathname || "/dashboard";
 
       navigate(destination, {
         replace: true,

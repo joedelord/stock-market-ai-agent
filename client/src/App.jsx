@@ -1,5 +1,6 @@
 import { BrowserRouter, Route, Routes } from "react-router";
 
+import AppLayout from "./components/AppLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import RoleRoute from "./components/RoleRoute";
 
@@ -33,7 +34,9 @@ function App() {
         <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<Dashboard />} />
 
-          <Route path="/stocks" element={<StockDashboard />} />
+          <Route element={<AppLayout />}>
+            <Route path="/stocks" element={<StockDashboard />} />
+          </Route>
 
           <Route path="/alerts" element={<Alerts />} />
 
