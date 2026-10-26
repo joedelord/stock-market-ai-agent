@@ -120,3 +120,63 @@
   .account-card { padding: 22px; }
   .profile-details > div { grid-template-columns: minmax(0, 1fr); gap: 5px; }
 }
+
+/* Public market overview and authentication */
+.public-account-nav { margin-left: auto; display: flex; align-items: center; gap: 20px; font-size: 14px; }
+.public-nav-cta { padding: 10px 15px; border-radius: 8px; background: #2563eb; color: white; }
+.public-nav-cta:hover { background: #1d4ed8; }
+.market-home { max-width: 1280px; margin: auto; padding: 48px 32px; }
+.market-hero { display: grid; grid-template-columns: 1.2fr 1fr; gap: 64px; align-items: center; padding: 20px 0 54px; }
+.market-hero h1 { margin: 15px 0 20px; font-size: clamp(38px, 5vw, 62px); font-weight: 750; letter-spacing: -.045em; line-height: 1.1; color: #14233d; }
+.market-hero h1 span { color: #2563eb; }
+.market-hero > div > p:last-child { color: #64748b; line-height: 1.8; }
+.hero-workspace-card { padding: 34px; border-radius: 20px; background: #101e36; color: white; }
+.hero-workspace-card .workspace-eyebrow { color: #93c5fd; }
+.hero-workspace-card h2 { font-size: 25px; font-weight: 650; margin: 12px 0; }
+.hero-workspace-card p { color: #c2cde0; font-size: 14px; line-height: 1.8; margin-bottom: 25px; }
+.market-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px; }
+.market-toolbar h2 { font-size: 24px; font-weight: 700; color: #14233d; }
+.market-toolbar p { color: #64748b; font-size: 13px; margin-top: 5px; }
+.market-toolbar select, .market-refresh { border: 1px solid #cbd5e1; background: white; padding: 9px 12px; border-radius: 8px; font-size: 13px; }
+.market-refresh:disabled { opacity: .5; }
+.market-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; margin-top: 22px; }
+.market-card { border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background: white; }
+.market-card > header { padding: 24px; border-bottom: 1px solid #edf0f5; }
+.market-card h2 { font-size: 18px; font-weight: 700; }
+.market-card header p { color: #64748b; font-size: 12px; margin-top: 5px; }
+.market-stock-list { list-style: none; margin: 0; padding: 0; }
+.market-stock-list li { padding: 18px 24px; border-bottom: 1px solid #f1f5f9; }
+.market-stock-list li:last-child { border-bottom: 0; }
+.market-stock-top, .market-stock-bottom { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.market-stock-top > strong { white-space: nowrap; }
+.market-stock-bottom { color: #64748b; font-size: 12px; margin-top: 6px; }
+.market-stock-bottom span:last-child { white-space: nowrap; }
+.market-exchange { font-size: 10px; color: #64748b; margin-left: 6px; }
+.market-quote-time { color: #64748b; font-size: 10px; margin-top: 9px; }
+.market-data-note { font-size: 11px; color: #64748b; line-height: 1.8; margin-top: 18px; max-width: 900px; }
+.market-empty, .market-loading { color: #64748b; font-size: 14px; padding: 32px 24px; }
+.market-join { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 24px; margin-top: 48px; padding: 30px; border: 1px solid #dbeafe; border-radius: 16px; background: #eff6ff; }
+.market-join h2 { font-size: 21px; font-weight: 700; }
+.market-join p { color: #64748b; font-size: 14px; margin-top: 7px; }
+.auth-layout { max-width: 1120px; margin: auto; min-height: 78vh; padding: 64px 32px; display: grid; grid-template-columns: 1fr 1fr; gap: 85px; align-items: center; }
+.auth-story h2 { margin: 20px 0; color: #14233d; font-size: 40px; font-weight: 750; line-height: 1.2; letter-spacing: -.035em; }
+.auth-story > p { color: #64748b; line-height: 1.8; font-size: 14px; }
+.auth-story .workspace-eyebrow { font-size: 11px; }
+.auth-benefits { list-style: none; margin: 32px 0; padding: 0; display: grid; gap: 24px; }
+.auth-benefits li { display: flex; align-items: flex-start; gap: 16px; font-size: 14px; }
+.auth-benefits li > span { border: 1px solid #dbeafe; background: #eff6ff; color: #2563eb; padding: 8px; border-radius: 9px; font-size: 12px; }
+.auth-benefits p { color: #64748b; font-size: 12px; line-height: 1.7; margin-top: 5px; }
+.auth-story .auth-story-note { font-size: 11px; }
+.auth-card { min-width: 0; padding: 36px; background: white; border: 1px solid #e2e8f0; border-radius: 18px; box-shadow: 0 12px 38px #0f172a05; }
+.auth-card h1 { font-size: 29px; font-weight: 750; margin: 10px 0; color: #14233d; }
+.auth-description { color: #64748b; font-size: 13px; line-height: 1.8; margin-bottom: 25px; }
+.auth-card form { background: none; border: 0; margin: 0; padding: 0; max-width: none; }
+.auth-card input { width: 100%; padding: 11px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fbfcfe; }
+.auth-card label { font-size: 13px; font-weight: 500; color: #334155; }
+.auth-card button[type="submit"] { width: 100%; padding: 12px; margin-top: 24px; font-size: 14px; font-weight: 600; }
+@media (max-width: 1023.98px) { .market-grid { gap: 14px; } .market-stock-list li { padding: 18px 16px; } .market-hero { gap: 30px; } .auth-layout { gap: 40px; } }
+@media (max-width: 767.98px) {
+  .market-home { padding: 28px 16px; } .market-hero, .market-grid { grid-template-columns: minmax(0, 1fr); } .market-hero { gap: 28px; padding-bottom: 36px; } .hero-workspace-card { padding: 26px; } .market-join { padding: 24px; }
+  .public-account-nav { gap: 12px; font-size: 12px; } .public-nav-cta { padding: 9px 10px; }
+  .auth-layout { grid-template-columns: minmax(0, 1fr); padding: 28px 16px; gap: 28px; } .auth-card { grid-row: 1; padding: 26px; } .auth-story { padding: 16px; } .auth-story h2 { font-size: 30px; } .auth-benefits { margin: 24px 0; }
+}

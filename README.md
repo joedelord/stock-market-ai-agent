@@ -228,6 +228,7 @@ The Vite development server forwards `/api` requests to the backend. Run
 
 | Path                | Access          | Content                               |
 | ------------------- | --------------- | ------------------------------------- |
+| `/`                 | public          | Market movers and most followed       |
 | `/stocks`           | logged in       | Watchlist, price chart, AI analysis   |
 | `/alerts`           | logged in       | Create, edit, pause and delete alerts |
 | `/account`          | logged in       | Profile and account details           |
@@ -251,6 +252,7 @@ while the tab is visible.
 | Method | Endpoint                   | Description                     |
 | ------ | -------------------------- | ------------------------------- |
 | GET    | `/api/stocks`              | List stocks, sorted by name     |
+| GET    | `/api/stocks/overview`     | Public market overview          |
 | GET    | `/api/stocks/:id`          | Get one stock                   |
 | GET    | `/api/stocks/:id/prices`   | Get a stock and its latest bars |
 | POST   | `/api/stocks/:id/analysis` | AI analysis (login required)    |
@@ -282,6 +284,19 @@ charting, and the latest quote (`null` if there is none yet):
   }
 }
 ```
+
+`GET /api/stocks/overview` takes `market` (`all`, `us` or `helsinki`,
+default `all`) and returns `{ gainers, losers, mostFollowed, generatedAt }`,
+up to five stocks each:
+
+- **Gainers and losers** rank the stored quotes' day change. Only quotes
+  from each exchange's latest stored trading day count, so a stale quote
+  never ranks next to today's. Every row keeps its real `price_time`.
+- **Most followed** lists stocks on at least two users' watchlists. The
+  endpoint is public, and a count of one would show what a single user
+  follows.
+- Only supported exchanges (`XHEL`, `XNAS`, `XNYS`) are included, so mock
+  stocks never appear.
 
 `POST /api/stocks` body:
 

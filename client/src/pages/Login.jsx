@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router";
 
 import { useAuth } from "../context/useAuth";
+import AuthPage from "../components/AuthPage";
 import LoginForm from "../components/admin/LoginForm";
 import { getErrorMessage } from "../services/errors";
 
@@ -45,8 +46,7 @@ function Login() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-100 p-8">
-      <h1 className="text-4xl font-bold mb-5 text-center">Login</h1>
+    <AuthPage title="Login" description="Welcome back. Your watchlist is waiting for you.">
 
       <LoginForm
         onSubmit={handleLogin}
@@ -63,7 +63,7 @@ function Login() {
           Forgot password?
         </Link>
       </div>
-    </main>
+    </AuthPage>
   );
 }
 

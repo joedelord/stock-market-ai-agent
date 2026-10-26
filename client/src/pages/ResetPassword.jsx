@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router";
 
 import FormField from "../components/FormField";
-import FormPage from "../components/FormPage";
+import AuthPage from "../components/AuthPage";
 import SubmitButton from "../components/SubmitButton";
 import api from "../services/api";
 import { getErrorMessage } from "../services/errors";
@@ -42,7 +42,7 @@ function ResetPassword() {
 
   if (!token) {
     return (
-      <FormPage title="Reset password">
+      <AuthPage title="Reset password">
         <p role="alert" className="text-red-500">
           This reset link is not valid.
         </p>
@@ -52,13 +52,13 @@ function ResetPassword() {
             Request a new link
           </Link>
         </p>
-      </FormPage>
+      </AuthPage>
     );
   }
 
   if (isReset) {
     return (
-      <FormPage title="Reset password">
+      <AuthPage title="Reset password">
         <p role="status" className="text-green-700">
           Your password has been reset.
         </p>
@@ -68,12 +68,12 @@ function ResetPassword() {
             Log in
           </Link>
         </p>
-      </FormPage>
+      </AuthPage>
     );
   }
 
   return (
-    <FormPage title="Reset password">
+    <AuthPage title="Reset password">
       <form onSubmit={handleSubmit}>
         <FormField
           id="password"
@@ -114,7 +114,7 @@ function ResetPassword() {
           Request a new link
         </Link>
       </p>
-    </FormPage>
+    </AuthPage>
   );
 }
 

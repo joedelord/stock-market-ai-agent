@@ -42,6 +42,7 @@ export default function AppLayout() {
         <div className="app-header-inner">
           <Link to="/stocks" className="app-brand"><span aria-hidden="true" className="brand-mark">↗</span> Stock Market <span className="brand-tag">AI</span></Link>
           <nav aria-label="Main navigation" className="app-nav">
+            <NavLink to="/" end>Markets</NavLink>
             <NavLink to="/stocks">My stocks</NavLink>
             <NavLink to="/alerts">Alerts</NavLink>
           </nav>

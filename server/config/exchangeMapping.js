@@ -14,6 +14,9 @@ const EXCHANGE_TIME_ZONES = {
 
 const DEFAULT_TIME_ZONE = "UTC";
 
+// Exchanges with real market data. Seeded mock stocks use other codes.
+const SUPPORTED_EXCHANGES = Object.keys(PROVIDER_EXCHANGES);
+
 const getExchangeTimeZone = (exchange) =>
   EXCHANGE_TIME_ZONES[exchange] ?? DEFAULT_TIME_ZONE;
 
@@ -28,6 +31,7 @@ const getProviderExchange = (exchange) => {
 };
 
 module.exports = {
+  SUPPORTED_EXCHANGES,
   getExchangeTimeZone,
   getProviderExchange,
 };
