@@ -212,40 +212,52 @@ const triggerAlerts = async (
       return [];
     }
 
+    // The CTE joins the inserted rows to users, so the caller can email them.
     const result = await client.query(
-      `INSERT INTO notifications (
-        user_id,
-        alert_id,
-        message,
-        price,
-        daily_change_percent,
-        price_time,
-        market_date
+      `WITH inserted AS (
+        INSERT INTO notifications (
+          user_id,
+          alert_id,
+          message,
+          price,
+          daily_change_percent,
+          price_time,
+          market_date
+        )
+        SELECT
+          notification.user_id,
+          notification.alert_id,
+          notification.message,
+          $4,
+          notification.daily_change_percent,
+          $5,
+          $6
+        FROM UNNEST(
+          $1::int[],
+          $2::bigint[],
+          $3::text[],
+          $7::numeric[]
+        ) AS notification(
+          user_id,
+          alert_id,
+          message,
+          daily_change_percent
+        )
+        RETURNING
+          id,
+          user_id,
+          alert_id,
+          message
       )
       SELECT
-        notification.user_id,
-        notification.alert_id,
-        notification.message,
-        $4,
-        notification.daily_change_percent,
-        $5,
-        $6
-      FROM UNNEST(
-        $1::int[],
-        $2::bigint[],
-        $3::text[],
-        $7::numeric[]
-      ) AS notification(
-        user_id,
-        alert_id,
-        message,
-        daily_change_percent
-      )
-      RETURNING
-        id,
-        user_id,
-        alert_id,
-        message`,
+        inserted.id,
+        inserted.user_id,
+        inserted.alert_id,
+        inserted.message,
+        users.email
+      FROM inserted
+      JOIN users ON users.id = inserted.user_id
+      ORDER BY inserted.id`,
       [
         alerts.map((alert) => alert.user_id),
         alerts.map((alert) => alert.id),

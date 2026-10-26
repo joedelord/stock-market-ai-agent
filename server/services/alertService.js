@@ -1,6 +1,8 @@
 const alertModel = require("../models/alertModel");
 const stockModel = require("../models/stockModel");
+const emailService = require("./emailService");
 const { getExchangeTimeZone } = require("../config/exchangeMapping");
+const logger = require("../utils/logger");
 const { parseDecimal } = require("../utils/parseDecimal");
 
 const PRICE_INTERVAL = "15min";
@@ -78,9 +80,29 @@ const checkStockAlerts = async (stock) => {
 
   if (!latest) return [];
 
-  return alertModel.triggerAlerts(stock.id, latest, (alert) =>
-    buildAlertMessage(stock, alert, latest.price),
+  const notifications = await alertModel.triggerAlerts(
+    stock.id,
+    latest,
+    (alert) => buildAlertMessage(stock, alert, latest.price),
   );
+
+  // The notifications are already saved, so a failed email is only logged.
+  const results = await Promise.allSettled(
+    notifications.map((notification) =>
+      emailService.sendAlertNotificationEmail(
+        notification.email,
+        notification.message,
+      ),
+    ),
+  );
+
+  results
+    .filter((result) => result.status === "rejected")
+    .forEach((result) => {
+      logger.error({ err: result.reason }, "Failed to send alert email");
+    });
+
+  return notifications;
 };
 
 module.exports = {

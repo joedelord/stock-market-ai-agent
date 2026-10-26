@@ -3,9 +3,9 @@ const bcrypt = require("bcryptjs");
 
 const authModel = require("../models/authModel");
 const passwordResetModel = require("../models/passwordResetModel");
+const emailService = require("./emailService");
 const HttpError = require("../utils/httpError");
 const logger = require("../utils/logger");
-const mailer = require("../utils/mailer");
 
 const SALT_ROUNDS = 12;
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
@@ -68,7 +68,14 @@ const changeUserPassword = async (userId, currentPassword, newPassword) => {
 
   const newPasswordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
 
-  return authModel.updatePassword(userId, newPasswordHash);
+  const user = await authModel.updatePassword(userId, newPasswordHash);
+
+  // Not awaited: a failing email must not undo or delay the change.
+  emailService.sendPasswordChangedEmail(user.email).catch((error) => {
+    logger.error({ err: error }, "Failed to send password changed email");
+  });
+
+  return user;
 };
 
 // Only the SHA-256 hash of a reset token is stored, so a database leak does
@@ -96,7 +103,7 @@ const requestPasswordReset = async (email) => {
 
   // Not awaited, so slow or failing delivery neither delays the response nor
   // reveals whether the account exists.
-  mailer.sendPasswordResetEmail(user.email, resetUrl).catch((error) => {
+  emailService.sendPasswordResetEmail(user.email, resetUrl).catch((error) => {
     logger.error({ err: error }, "Failed to send password reset email");
   });
 };

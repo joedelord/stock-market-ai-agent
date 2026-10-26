@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "market:once": "node scripts/updatePrices.js",
     "market:watch": "node scripts/startMarketScheduler.js",
-    "seed:mock": "node scripts/seedMockData.js"
+    "seed:mock": "node scripts/seedMockData.js",
+    "email:test": "node scripts/sendTestEmail.js"
   },
   "keywords": [],
   "author": "",
@@ -29,6 +30,7 @@
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "node-cron": "^4.6.0",
+    "nodemailer": "^10.2.1",
     "pg": "^8.22.0",
     "pino": "^10.4.0",
     "pino-http": "^11.0.0",

@@ -102,6 +102,7 @@ const updatePassword = async (id, passwordHash) => {
      WHERE id = $2
      RETURNING
        id,
+       email,
        token_version`,
     [passwordHash, id],
   );
