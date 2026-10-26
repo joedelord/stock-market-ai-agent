@@ -58,14 +58,14 @@ describe("RoleRoute", () => {
             <Route path="/admin" element={<h1>Admin page</h1>} />
           </Route>
 
-          <Route path="/dashboard" element={<h1>Dashboard</h1>} />
+          <Route path="/stocks" element={<h1>My stocks</h1>} />
         </Routes>
       </MemoryRouter>,
     );
 
     expect(
       screen.getByRole("heading", {
-        name: "Dashboard",
+        name: "My stocks",
       }),
     ).toBeInTheDocument();
   });
@@ -86,7 +86,7 @@ describe("RoleRoute", () => {
             <Route path="/admin" element={<h1>Admin page</h1>} />
           </Route>
 
-          <Route path="/dashboard" element={<h1>Dashboard</h1>} />
+          <Route path="/stocks" element={<h1>My stocks</h1>} />
         </Routes>
       </MemoryRouter>,
     );

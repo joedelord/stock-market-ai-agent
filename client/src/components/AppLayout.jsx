@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link, NavLink, Outlet, useNavigate } from "react-router";
+import { useEffect, useRef, useState } from "react";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { useAuth } from "../context/useAuth";
 import NotificationCenter from "./NotificationCenter";
 import { getErrorMessage } from "../services/errors";
@@ -7,8 +7,20 @@ import { getErrorMessage } from "../services/errors";
 export default function AppLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const menuRef = useRef(null);
+
+  // <details> stays open on outside clicks, unlike a native menu.
+  useEffect(() => {
+    function handlePointerDown(event) {
+      const menu = menuRef.current;
+      if (menu?.open && !menu.contains(event.target)) menu.open = false;
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, []);
 
   async function handleLogout() {
     setBusy(true);
@@ -28,23 +40,22 @@ export default function AppLayout() {
       <a className="skip-link" href="#main-content">Skip to content</a>
       <header className="app-header">
         <div className="app-header-inner">
-          <Link to="/" className="app-brand"><span aria-hidden="true" className="brand-mark">↗</span> Stock Market <span className="brand-tag">AI</span></Link>
+          <Link to="/stocks" className="app-brand"><span aria-hidden="true" className="brand-mark">↗</span> Stock Market <span className="brand-tag">AI</span></Link>
           <nav aria-label="Main navigation" className="app-nav">
-            <NavLink to="/" end>Markets</NavLink>
             <NavLink to="/stocks">My stocks</NavLink>
             <NavLink to="/alerts">Alerts</NavLink>
           </nav>
           <div className="app-user-actions">
             <NotificationCenter />
-            <details className="account-menu" onKeyDown={(event) => {
+            <details key={location.pathname} ref={menuRef} className="account-menu" onKeyDown={(event) => {
               if (event.key === "Escape") {
                 event.currentTarget.open = false;
                 event.currentTarget.querySelector("summary").focus();
               }
             }}>
-              <summary>{user?.username || "Account"}<span aria-hidden="true"> ▾</span></summary>
+              <summary className={["/account", "/admin"].some((path) => location.pathname.startsWith(path)) ? "account-active" : undefined}>{user?.username || "Account"}<span aria-hidden="true"> ▾</span></summary>
               <nav aria-label="Account" className="account-panel">
-                <Link to="/dashboard">My profile</Link>
+                <Link to="/account">My profile</Link>
                 <Link to="/account/password">Change password</Link>
                 {["admin", "moderator"].includes(user?.role) && <Link to="/admin">Administration</Link>}
                 <button type="button" disabled={busy} onClick={handleLogout}>{busy ? "Logging out…" : "Log out"}</button>

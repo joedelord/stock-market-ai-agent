@@ -23,9 +23,18 @@ test("provides active navigation, account links and keyboard dismissal", async (
   renderLayout();
   expect(screen.getByRole("link", { name: "My stocks" })).toHaveAttribute("aria-current", "page");
   await user.click(screen.getByText("Jouni"));
-  expect(screen.getByRole("link", { name: "My profile" })).toHaveAttribute("href", "/dashboard");
+  expect(screen.getByRole("link", { name: "My profile" })).toHaveAttribute("href", "/account");
   expect(screen.queryByRole("link", { name: "Administration" })).not.toBeInTheDocument();
   await user.keyboard("{Escape}");
+  expect(screen.getByText("Jouni").closest("details")).not.toHaveAttribute("open");
+});
+
+test("closes the account menu on an outside click", async () => {
+  const user = userEvent.setup();
+  renderLayout();
+  await user.click(screen.getByText("Jouni"));
+  expect(screen.getByText("Jouni").closest("details")).toHaveAttribute("open");
+  await user.click(screen.getByText("Watchlist content"));
   expect(screen.getByText("Jouni").closest("details")).not.toHaveAttribute("open");
 });
 

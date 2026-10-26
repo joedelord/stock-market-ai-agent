@@ -78,6 +78,45 @@
 
 @media (max-width: 639.98px) {
   .app-user-actions .notification-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-  .app-user-actions > div > button { padding: 10px; }
-  .app-user-actions > div > section { position: fixed; left: 16px; right: 16px; top: 74px; width: auto; max-height: calc(100dvh - 100px); overflow-y: auto; }
+  .app-user-actions .notification-toggle { padding: 10px; }
+  .app-user-actions .notification-panel { position: fixed; left: 16px; right: 16px; top: 74px; width: auto; max-height: calc(100dvh - 100px); overflow-y: auto; }
+}
+
+/* Account overview and password settings */
+.account-workspace { min-height: 75vh; }
+.account-layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 28px; align-items: start; }
+.account-sidebar { min-width: 0; overflow: hidden; border: 1px solid #e2e8f0; border-radius: 16px; background: white; }
+.account-identity { padding: 28px 22px; border-bottom: 1px solid #edf0f5; }
+.account-avatar { display: grid; place-items: center; width: 60px; height: 60px; margin-bottom: 16px; border-radius: 18px; background: #eaf1ff; color: #2563eb; font-size: 22px; font-weight: 750; }
+.account-identity p { overflow-wrap: anywhere; }
+.account-tabs { display: grid; gap: 4px; padding: 12px; }
+.account-tabs a { padding: 12px; border-radius: 8px; font-size: 14px; color: #475569; }
+.account-tabs a:hover { background: #f8fafc; }
+.account-tabs a[aria-current="page"] { background: #eff6ff; color: #1d4ed8; font-weight: 600; }
+.account-content { min-width: 0; display: grid; gap: 22px; }
+.account-card { min-width: 0; padding: 28px; border: 1px solid #e2e8f0; border-radius: 16px; background: white; }
+.account-role { font-size: 12px; font-weight: 600; color: #1d4ed8; background: #eff6ff; border-radius: 20px; padding: 5px 12px; }
+.profile-details { margin-top: 24px; }
+.profile-details > div { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 16px; padding: 17px 0; border-top: 1px solid #edf0f5; font-size: 14px; }
+.profile-details dt { color: #64748b; }
+.profile-details dd { font-weight: 500; overflow-wrap: anywhere; }
+.account-primary-link { display: inline-flex; align-items: center; justify-content: center; gap: 22px; padding: 10px 16px; border-radius: 8px; background: #2563eb; color: white; font-size: 14px; font-weight: 600; }
+.account-primary-link:hover { background: #1d4ed8; }
+.account-shortcuts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-top: 20px; }
+.account-shortcuts a { display: grid; gap: 6px; padding: 18px; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 14px; color: #1e3a5f; }
+.account-shortcuts a > span:last-child { font-size: 12px; color: #64748b; }
+.account-shortcuts a:hover { background: #f8fafc; border-color: #93c5fd; }
+.account-menu .account-active { border-color: #93c5fd; background: #263752; }
+.password-card form { max-width: 480px; }
+.password-card input { width: 100%; padding: 11px 12px; border-color: #cbd5e1; border-radius: 8px; background: #fbfcfe; }
+.password-card label { font-size: 14px; font-weight: 500; color: #334155; }
+.password-card fieldset:disabled { opacity: .65; }
+@media (max-width: 767.98px) {
+  .account-layout { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .account-identity { padding: 20px; }
+  .account-avatar { width: 44px; height: 44px; border-radius: 12px; font-size: 18px; margin-bottom: 10px; }
+  .account-tabs { grid-template-columns: 1fr 1fr; }
+  .account-tabs a { padding: 10px 8px; text-align: center; font-size: 13px; }
+  .account-card { padding: 22px; }
+  .profile-details > div { grid-template-columns: minmax(0, 1fr); gap: 5px; }
 }

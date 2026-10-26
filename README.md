@@ -228,17 +228,23 @@ The Vite development server forwards `/api` requests to the backend. Run
 
 | Path                | Access          | Content                               |
 | ------------------- | --------------- | ------------------------------------- |
-| `/dashboard`        | logged in       | Account details and links             |
 | `/stocks`           | logged in       | Watchlist, price chart, AI analysis   |
 | `/alerts`           | logged in       | Create, edit, pause and delete alerts |
+| `/account`          | logged in       | Profile and account details           |
 | `/account/password` | logged in       | Change password                       |
 | `/admin`            | moderator/admin | User management                       |
+
+Logged-in pages share a header with navigation, the notification bell and
+an account menu (profile, password, administration, log out). Registration
+leads to `/stocks`. Login leads back to the page the user tried to open, or
+to `/stocks`.
+The old `/dashboard` path redirects to `/stocks`.
 
 On `/stocks` the user picks the stocks on their watchlist. The list shows
 each stock's latest price and day change. The chart shows the selected
 stock's closing prices for the latest trading day, by the exchange's local
-date. The notification bell on the dashboard, stocks and alerts pages
-checks for new notifications every minute while the tab is visible.
+date. The notification bell checks for new notifications every minute
+while the tab is visible.
 
 ## Stocks API
 

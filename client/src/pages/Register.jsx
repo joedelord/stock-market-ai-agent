@@ -24,7 +24,7 @@ function Register() {
   }
 
   if (isAuthenticated && !isSubmitting) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/stocks" replace />;
   }
 
   const handleSubmit = async (event) => {
@@ -42,7 +42,7 @@ function Register() {
     try {
       await register({ username, email, password });
 
-      navigate("/dashboard", { replace: true });
+      navigate("/stocks", { replace: true });
     } catch (error) {
       setErrorMessage(getErrorMessage(error, "Registration failed"));
     } finally {
