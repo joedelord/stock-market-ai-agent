@@ -66,8 +66,8 @@ function StockList({
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-      <table className="w-full text-left text-sm">
+    <div className="watchlist-table overflow-x-auto rounded-xl border border-gray-200 bg-white">
+      <table role="table" className="w-full text-left text-sm">
         <caption className="sr-only">
           Stocks. The 15 min change compares the two latest stored prices. The
           day change compares the latest quote with the previous trading day's
@@ -75,32 +75,32 @@ function StockList({
           see its chart.
         </caption>
 
-        <thead className="bg-gray-50 text-gray-600">
-          <tr>
-            <th scope="col" className="px-4 py-3">
+        <thead role="rowgroup" className="bg-gray-50 text-gray-600">
+          <tr role="row">
+            <th role="columnheader" scope="col" className="px-4 py-3">
               Stock
             </th>
-            <th scope="col" className="px-4 py-3 text-right">
+            <th role="columnheader" scope="col" className="px-4 py-3 text-right">
               Price
             </th>
-            <th scope="col" className="px-4 py-3 text-right">
+            <th role="columnheader" scope="col" className="px-4 py-3 text-right">
               15 min change
             </th>
-            <th scope="col" className="px-4 py-3 text-right">
+            <th role="columnheader" scope="col" className="px-4 py-3 text-right">
               Day change
             </th>
-            <th scope="col" className="px-4 py-3">
+            <th role="columnheader" scope="col" className="px-4 py-3">
               Price time (Helsinki)
             </th>
             {onRemoveStock && (
-              <th scope="col" className="px-4 py-3">
+              <th role="columnheader" scope="col" className="px-4 py-3">
                 Watchlist
               </th>
             )}
           </tr>
         </thead>
 
-        <tbody className="divide-y divide-gray-100">
+        <tbody role="rowgroup" className="divide-y divide-gray-100">
           {stocks.map((stock) => {
             const prices = pricesByStockId[stock.id] ?? [];
             const latest = prices.at(-1);
@@ -130,10 +130,11 @@ function StockList({
 
             return (
               <tr
+                role="row"
                 key={stock.id}
-                className={selected ? "bg-blue-50" : "hover:bg-gray-50"}
+                className={selected ? "stock-row bg-blue-50" : "stock-row hover:bg-gray-50"}
               >
-                <td className="px-4 py-3">
+                <td role="cell" className="px-4 py-3">
                   <button
                     type="button"
                     onClick={() => onSelectStock(stock.id)}
@@ -149,18 +150,20 @@ function StockList({
                   </button>
                 </td>
 
-                <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums">
+                <td role="cell" data-label="Price" className="whitespace-nowrap px-4 py-3 text-right tabular-nums">
                   {formatPrice(latest?.close, stock.currency)}
                 </td>
 
                 <td
-                  className={`whitespace-nowrap px-4 py-3 text-right tabular-nums ${getChangeColor(change)}`}
+                  role="cell"
+                  data-label="15 min" className={`whitespace-nowrap px-4 py-3 text-right tabular-nums ${getChangeColor(change)}`}
                 >
                   {formatChange(change)}
                 </td>
 
                 <td
-                  className={`whitespace-nowrap px-4 py-3 text-right tabular-nums ${getChangeColor(dayChange)}`}
+                  role="cell"
+                  data-label="Day" className={`whitespace-nowrap px-4 py-3 text-right tabular-nums ${getChangeColor(dayChange)}`}
                 >
                   {formatChange(dayChange)}
 
@@ -174,11 +177,11 @@ function StockList({
                   )}
                 </td>
 
-                <td className="whitespace-nowrap px-4 py-3 text-gray-500">
+                <td role="cell" data-label="Price time · Helsinki" className="whitespace-nowrap px-4 py-3 text-gray-500">
                   {formatTime(latest?.price_time)}
                 </td>
                 {onRemoveStock && (
-                  <td className="px-4 py-3">
+                  <td role="cell" className="px-4 py-3">
                     <button
                       type="button"
                       disabled={disabled}

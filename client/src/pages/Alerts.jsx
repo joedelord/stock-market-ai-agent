@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
 import AlertForm from "../components/alerts/AlertForm";
 import AlertList from "../components/alerts/AlertList";
-import NotificationCenter from "../components/NotificationCenter";
 import {
   getAlerts,
   createAlert,
@@ -154,20 +153,15 @@ function Alerts() {
     : "";
 
   return (
-    <main className="min-h-screen bg-gray-100 px-4 py-8 sm:px-8">
-      <div className="mx-auto max-w-6xl space-y-6">
-        <header className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <Link to="/stocks" className="text-sm text-blue-700 underline">
-              ← Back to watchlist
-            </Link>
-            <h1 className="mt-3 text-3xl font-bold">My alerts</h1>
-            <p className="mt-2 max-w-xl text-sm text-gray-600">
-              Set a target price or a daily percentage change. Alerts work
-              independently of your watchlist.
-            </p>
-          </div>
-          <NotificationCenter />
+    <main id="main-content" className="stock-workspace px-4 py-8 sm:px-8">
+      <div className="mx-auto max-w-7xl space-y-6">
+        <header>
+          <p className="workspace-eyebrow">YOUR WORKSPACE</p>
+          <h1 className="mt-3 text-3xl font-bold">My alerts</h1>
+          <p className="mt-2 max-w-xl text-sm text-gray-600">
+            Set a target price or a daily percentage change. Alerts work
+            independently of your watchlist.
+          </p>
         </header>
         <p className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
           Conditions are checked during scheduled market updates, about every 15

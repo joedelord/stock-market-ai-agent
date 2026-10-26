@@ -22,7 +22,7 @@ const renderRegister = (register) => {
       <Routes>
         <Route path="/register" element={<Register />} />
 
-        <Route path="/dashboard" element={<h1>Dashboard</h1>} />
+        <Route path="/stocks" element={<h1>My stocks</h1>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -53,7 +53,7 @@ describe("Register", () => {
     });
 
     expect(
-      await screen.findByRole("heading", { name: "Dashboard" }),
+      await screen.findByRole("heading", { name: "My stocks" }),
     ).toBeInTheDocument();
   });
 

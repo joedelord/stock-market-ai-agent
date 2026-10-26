@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 
 import FormField from "../components/FormField";
-import FormPage from "../components/FormPage";
+import AccountPage from "../components/AccountPage";
 import SubmitButton from "../components/SubmitButton";
 import api from "../services/api";
 import { getErrorMessage } from "../services/errors";
@@ -46,8 +46,12 @@ function ChangePassword() {
   };
 
   return (
-    <FormPage title="Change password">
-      <form onSubmit={handleSubmit}>
+    <AccountPage title="Change password" description="Keep your account secure with a strong, unique password.">
+      <section className="account-card password-card" aria-labelledby="password-form-title">
+      <h2 id="password-form-title" className="text-lg font-bold">Update your password</h2>
+      <p id="password-guidance" className="mt-2 mb-6 text-sm text-gray-500">Use 8–128 characters. Your other devices will be signed out after the change.</p>
+      <form onSubmit={handleSubmit} aria-busy={isSubmitting} aria-describedby="password-guidance">
+        <fieldset disabled={isSubmitting}>
         <FormField
           id="currentPassword"
           label="Current password"
@@ -82,6 +86,8 @@ function ChangePassword() {
           onChange={(event) => setConfirmPassword(event.target.value)}
         />
 
+        </fieldset>
+
         {errorMessage && (
           <p className="mt-2 text-red-500" role="alert">
             {errorMessage}
@@ -100,11 +106,12 @@ function ChangePassword() {
       </form>
 
       <p className="mt-4 text-sm">
-        <Link to="/dashboard" className="text-blue-700 underline">
-          Back to dashboard
+        <Link to="/account" className="text-blue-700 underline">
+          Back to my profile
         </Link>
       </p>
-    </FormPage>
+    </section>
+    </AccountPage>
   );
 }
 

@@ -59,7 +59,20 @@ const stockPricesSchema = z.object({
   }),
 });
 
+const MARKETS = ["all", "us", "helsinki"];
+
+const marketOverviewSchema = z.object({
+  query: z.object({
+    market: z
+      .enum(MARKETS, {
+        error: `Market must be one of: ${MARKETS.join(", ")}`,
+      })
+      .default("all"),
+  }),
+});
+
 module.exports = {
+  marketOverviewSchema,
   stockIdField,
   createStockSchema,
   stockIdSchema,

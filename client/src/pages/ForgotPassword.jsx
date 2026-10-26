@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 
 import FormField from "../components/FormField";
-import FormPage from "../components/FormPage";
+import AuthPage from "../components/AuthPage";
 import SubmitButton from "../components/SubmitButton";
 import api from "../services/api";
 import { getErrorMessage } from "../services/errors";
@@ -31,7 +31,7 @@ function ForgotPassword() {
   };
 
   return (
-    <FormPage title="Forgot password">
+    <AuthPage title="Forgot password">
       {successMessage ? (
         <p role="status" className="text-green-700">
           {successMessage}
@@ -69,7 +69,7 @@ function ForgotPassword() {
           Back to login
         </Link>
       </p>
-    </FormPage>
+    </AuthPage>
   );
 }
 

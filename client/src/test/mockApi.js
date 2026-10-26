@@ -5,7 +5,7 @@ import api from "../services/api";
 const originalAdapter = api.defaults.adapter;
 
 // Answers api requests from a map of "METHOD /url" to handlers returning
-// [status, data], so tests run without a server.
+// [status, data] (or a promise of it), so tests run without a server.
 export function mockApi(routes) {
   const requests = [];
 
@@ -21,7 +21,7 @@ export function mockApi(routes) {
 
     requests.push({ route, body });
 
-    const [status, data] = handler(body);
+    const [status, data] = await handler(body);
 
     const response = { status, data, headers: {}, config, statusText: "" };
 

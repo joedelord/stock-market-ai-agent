@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router";
 
 import { useAuth } from "../context/useAuth";
+import AuthPage from "../components/AuthPage";
 import LoginForm from "../components/admin/LoginForm";
 import { getErrorMessage } from "../services/errors";
 
@@ -14,12 +15,17 @@ function Login() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const from = location.state?.from;
+  const destination = from?.pathname
+    ? `${from.pathname}${from.search || ""}${from.hash || ""}`
+    : "/stocks";
+
   if (isLoading) {
     return <p>Loading...</p>;
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={destination} replace />;
   }
 
   const handleLogin = async (email, password) => {
@@ -28,8 +34,6 @@ function Login() {
 
     try {
       await login(email, password);
-
-      const destination = location.state?.from?.pathname || "/dashboard";
 
       navigate(destination, {
         replace: true,
@@ -42,8 +46,7 @@ function Login() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-100 p-8">
-      <h1 className="text-4xl font-bold mb-5 text-center">Login</h1>
+    <AuthPage title="Login" description="Welcome back. Your watchlist is waiting for you.">
 
       <LoginForm
         onSubmit={handleLogin}
@@ -60,7 +63,7 @@ function Login() {
           Forgot password?
         </Link>
       </div>
-    </main>
+    </AuthPage>
   );
 }
 

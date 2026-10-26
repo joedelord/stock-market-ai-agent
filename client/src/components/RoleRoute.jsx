@@ -16,7 +16,7 @@ function RoleRoute({ allowedRoles }) {
   }
 
   if (!allowedRoles.includes(user.role)) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/stocks" replace />;
   }
 
   return <Outlet />;

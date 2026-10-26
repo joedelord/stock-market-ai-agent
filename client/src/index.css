@@ -32,3 +32,151 @@
     cursor: pointer;
   }
 }
+
+/* Workspace navigation and watchlist. Existing account pages keep their layout. */
+.app-shell { min-height: 100vh; background: #f5f7fb; }
+.app-header { background: #101e36; color: #fff; }
+.app-header-inner { max-width: 1280px; margin: auto; padding: 18px 32px; display: flex; align-items: center; gap: 32px; flex-wrap: wrap; }
+.app-brand { display: flex; align-items: center; gap: 9px; font-weight: 750; white-space: nowrap; }
+.brand-mark { background: #3b82f6; border-radius: 9px; padding: 2px 9px; font-size: 22px; }
+.brand-tag { color: #93c5fd; font-size: 12px; border: 1px solid #435575; border-radius: 5px; padding: 2px 5px; }
+.app-nav { display: flex; gap: 6px; }
+.app-nav a { padding: 9px 13px; border-radius: 8px; color: #c2cde0; font-size: 14px; }
+.app-nav a:hover, .app-nav a[aria-current="page"] { background: #263752; color: white; }
+.app-user-actions { margin-left: auto; display: flex; align-items: center; gap: 12px; color: #111827; }
+.account-menu { position: relative; color: white; font-size: 14px; }
+.account-menu summary { cursor: pointer; padding: 10px; border: 1px solid #435575; border-radius: 8px; }
+.account-panel { position: absolute; right: 0; top: calc(100% + 10px); z-index: 30; min-width: 210px; padding: 8px; border-radius: 12px; background: white; color: #1e293b; box-shadow: 0 12px 36px #0f172a26; border: 1px solid #e2e8f0; }
+.account-panel a, .account-panel button { display: block; width: 100%; text-align: left; padding: 10px; border-radius: 6px; }
+.account-panel a:hover, .account-panel button:hover { background: #eff6ff; }
+.app-footer { padding: 28px 16px; text-align: center; font-size: 12px; color: #64748b; }
+.skip-link { position: absolute; top: -100px; left: 16px; z-index: 50; background: white; color: #101e36; padding: 12px; }
+.skip-link:focus { top: 8px; }
+.workspace-eyebrow { font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: .12em; }
+.stock-workspace { min-height: 75vh; }
+.watchlist-layout { display: grid; grid-template-columns: minmax(0, 390px) minmax(0, 1fr); gap: 24px; align-items: start; }
+.watchlist-panel, .stock-detail-panel { min-width: 0; }
+.stock-detail-panel { display: grid; gap: 18px; }
+.stock-count { display: inline-block; margin-left: 6px; padding: 2px 8px; background: #e2e8f0; color: #475569; border-radius: 20px; font-size: 12px; vertical-align: middle; }
+.watchlist-table table, .watchlist-table tbody { display: block; }
+.watchlist-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.watchlist-table .stock-row { display: grid; grid-template-columns: 1fr 1fr; padding: 14px; gap: 8px 12px; border-left: 3px solid transparent; }
+.watchlist-table .stock-row.bg-blue-50 { border-left-color: #2563eb; }
+.watchlist-table td { display: block; padding: 0; white-space: normal; font-size: 13px; }
+.watchlist-table td:first-child { grid-column: 1 / -1; padding-bottom: 5px; }
+.watchlist-table td:first-child button { width: 100%; }
+.watchlist-table td[data-label] { text-align: left; }
+.watchlist-table td[data-label]::before { content: attr(data-label); display: block; color: #64748b; font-size: 10px; font-weight: 600; margin-bottom: 3px; }
+.watchlist-table td[data-label="Price time · Helsinki"] { font-size: 11px; }
+.watchlist-table td:last-child:not([data-label]) { text-align: right; align-self: end; }
+.empty-stock-detail { border: 1px dashed #cbd5e1; background: white; border-radius: 16px; padding: 70px 28px; text-align: center; color: #64748b; }
+.empty-stock-detail > span { display: block; color: #2563eb; font-size: 36px; }
+.empty-stock-detail h2 { font-size: 22px; font-weight: 700; color: #1e293b; margin: 12px 0; }
+:focus-visible { outline: 2px solid #3b82f6; outline-offset: 3px; }
+@media (max-width: 1023.98px) { .watchlist-layout { grid-template-columns: minmax(0, 310px) minmax(0, 1fr); gap: 16px; } .app-header-inner { gap: 16px; padding: 16px; } }
+@media (max-width: 767.98px) { .watchlist-layout { grid-template-columns: minmax(0, 1fr); } .app-nav { order: 3; width: 100%; } .app-user-actions { gap: 6px; } .app-brand { font-size: 14px; } .app-header-inner { gap: 12px; } .account-menu summary { max-width: 130px; overflow-wrap: anywhere; } }
+
+@media (max-width: 639.98px) {
+  .app-user-actions .notification-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .app-user-actions .notification-toggle { padding: 10px; }
+  .app-user-actions .notification-panel { position: fixed; left: 16px; right: 16px; top: 74px; width: auto; max-height: calc(100dvh - 100px); overflow-y: auto; }
+}
+
+/* Account overview and password settings */
+.account-workspace { min-height: 75vh; }
+.account-layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 28px; align-items: start; }
+.account-sidebar { min-width: 0; overflow: hidden; border: 1px solid #e2e8f0; border-radius: 16px; background: white; }
+.account-identity { padding: 28px 22px; border-bottom: 1px solid #edf0f5; }
+.account-avatar { display: grid; place-items: center; width: 60px; height: 60px; margin-bottom: 16px; border-radius: 18px; background: #eaf1ff; color: #2563eb; font-size: 22px; font-weight: 750; }
+.account-identity p { overflow-wrap: anywhere; }
+.account-tabs { display: grid; gap: 4px; padding: 12px; }
+.account-tabs a { padding: 12px; border-radius: 8px; font-size: 14px; color: #475569; }
+.account-tabs a:hover { background: #f8fafc; }
+.account-tabs a[aria-current="page"] { background: #eff6ff; color: #1d4ed8; font-weight: 600; }
+.account-content { min-width: 0; display: grid; gap: 22px; }
+.account-card { min-width: 0; padding: 28px; border: 1px solid #e2e8f0; border-radius: 16px; background: white; }
+.account-role { font-size: 12px; font-weight: 600; color: #1d4ed8; background: #eff6ff; border-radius: 20px; padding: 5px 12px; }
+.profile-details { margin-top: 24px; }
+.profile-details > div { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 16px; padding: 17px 0; border-top: 1px solid #edf0f5; font-size: 14px; }
+.profile-details dt { color: #64748b; }
+.profile-details dd { font-weight: 500; overflow-wrap: anywhere; }
+.account-primary-link { display: inline-flex; align-items: center; justify-content: center; gap: 22px; padding: 10px 16px; border-radius: 8px; background: #2563eb; color: white; font-size: 14px; font-weight: 600; }
+.account-primary-link:hover { background: #1d4ed8; }
+.account-shortcuts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-top: 20px; }
+.account-shortcuts a { display: grid; gap: 6px; padding: 18px; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 14px; color: #1e3a5f; }
+.account-shortcuts a > span:last-child { font-size: 12px; color: #64748b; }
+.account-shortcuts a:hover { background: #f8fafc; border-color: #93c5fd; }
+.account-menu .account-active { border-color: #93c5fd; background: #263752; }
+.password-card form { max-width: 480px; }
+.password-card input { width: 100%; padding: 11px 12px; border-color: #cbd5e1; border-radius: 8px; background: #fbfcfe; }
+.password-card label { font-size: 14px; font-weight: 500; color: #334155; }
+.password-card fieldset:disabled { opacity: .65; }
+@media (max-width: 767.98px) {
+  .account-layout { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .account-identity { padding: 20px; }
+  .account-avatar { width: 44px; height: 44px; border-radius: 12px; font-size: 18px; margin-bottom: 10px; }
+  .account-tabs { grid-template-columns: 1fr 1fr; }
+  .account-tabs a { padding: 10px 8px; text-align: center; font-size: 13px; }
+  .account-card { padding: 22px; }
+  .profile-details > div { grid-template-columns: minmax(0, 1fr); gap: 5px; }
+}
+
+/* Public market overview and authentication */
+.public-account-nav { margin-left: auto; display: flex; align-items: center; gap: 20px; font-size: 14px; }
+.public-nav-cta { padding: 10px 15px; border-radius: 8px; background: #2563eb; color: white; }
+.public-nav-cta:hover { background: #1d4ed8; }
+.market-home { max-width: 1280px; margin: auto; padding: 48px 32px; }
+.market-hero { display: grid; grid-template-columns: 1.2fr 1fr; gap: 64px; align-items: center; padding: 20px 0 54px; }
+.market-hero h1 { margin: 15px 0 20px; font-size: clamp(38px, 5vw, 62px); font-weight: 750; letter-spacing: -.045em; line-height: 1.1; color: #14233d; }
+.market-hero h1 span { color: #2563eb; }
+.market-hero > div > p:last-child { color: #64748b; line-height: 1.8; }
+.hero-workspace-card { padding: 34px; border-radius: 20px; background: #101e36; color: white; }
+.hero-workspace-card .workspace-eyebrow { color: #93c5fd; }
+.hero-workspace-card h2 { font-size: 25px; font-weight: 650; margin: 12px 0; }
+.hero-workspace-card p { color: #c2cde0; font-size: 14px; line-height: 1.8; margin-bottom: 25px; }
+.market-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px; }
+.market-toolbar h2 { font-size: 24px; font-weight: 700; color: #14233d; }
+.market-toolbar p { color: #64748b; font-size: 13px; margin-top: 5px; }
+.market-toolbar select, .market-refresh { border: 1px solid #cbd5e1; background: white; padding: 9px 12px; border-radius: 8px; font-size: 13px; }
+.market-refresh:disabled { opacity: .5; }
+.market-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; margin-top: 22px; }
+.market-card { border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background: white; }
+.market-card > header { padding: 24px; border-bottom: 1px solid #edf0f5; }
+.market-card h2 { font-size: 18px; font-weight: 700; }
+.market-card header p { color: #64748b; font-size: 12px; margin-top: 5px; }
+.market-stock-list { list-style: none; margin: 0; padding: 0; }
+.market-stock-list li { padding: 18px 24px; border-bottom: 1px solid #f1f5f9; }
+.market-stock-list li:last-child { border-bottom: 0; }
+.market-stock-top, .market-stock-bottom { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.market-stock-top > strong { white-space: nowrap; }
+.market-stock-bottom { color: #64748b; font-size: 12px; margin-top: 6px; }
+.market-stock-bottom span:last-child { white-space: nowrap; }
+.market-exchange { font-size: 10px; color: #64748b; margin-left: 6px; }
+.market-quote-time { color: #64748b; font-size: 10px; margin-top: 9px; }
+.market-data-note { font-size: 11px; color: #64748b; line-height: 1.8; margin-top: 18px; max-width: 900px; }
+.market-empty, .market-loading { color: #64748b; font-size: 14px; padding: 32px 24px; }
+.market-join { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 24px; margin-top: 48px; padding: 30px; border: 1px solid #dbeafe; border-radius: 16px; background: #eff6ff; }
+.market-join h2 { font-size: 21px; font-weight: 700; }
+.market-join p { color: #64748b; font-size: 14px; margin-top: 7px; }
+.auth-layout { max-width: 1120px; margin: auto; min-height: 78vh; padding: 64px 32px; display: grid; grid-template-columns: 1fr 1fr; gap: 85px; align-items: center; }
+.auth-story h2 { margin: 20px 0; color: #14233d; font-size: 40px; font-weight: 750; line-height: 1.2; letter-spacing: -.035em; }
+.auth-story > p { color: #64748b; line-height: 1.8; font-size: 14px; }
+.auth-story .workspace-eyebrow { font-size: 11px; }
+.auth-benefits { list-style: none; margin: 32px 0; padding: 0; display: grid; gap: 24px; }
+.auth-benefits li { display: flex; align-items: flex-start; gap: 16px; font-size: 14px; }
+.auth-benefits li > span { border: 1px solid #dbeafe; background: #eff6ff; color: #2563eb; padding: 8px; border-radius: 9px; font-size: 12px; }
+.auth-benefits p { color: #64748b; font-size: 12px; line-height: 1.7; margin-top: 5px; }
+.auth-story .auth-story-note { font-size: 11px; }
+.auth-card { min-width: 0; padding: 36px; background: white; border: 1px solid #e2e8f0; border-radius: 18px; box-shadow: 0 12px 38px #0f172a05; }
+.auth-card h1 { font-size: 29px; font-weight: 750; margin: 10px 0; color: #14233d; }
+.auth-description { color: #64748b; font-size: 13px; line-height: 1.8; margin-bottom: 25px; }
+.auth-card form { background: none; border: 0; margin: 0; padding: 0; max-width: none; }
+.auth-card input { width: 100%; padding: 11px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fbfcfe; }
+.auth-card label { font-size: 13px; font-weight: 500; color: #334155; }
+.auth-card button[type="submit"] { width: 100%; padding: 12px; margin-top: 24px; font-size: 14px; font-weight: 600; }
+@media (max-width: 1023.98px) { .market-grid { gap: 14px; } .market-stock-list li { padding: 18px 16px; } .market-hero { gap: 30px; } .auth-layout { gap: 40px; } }
+@media (max-width: 767.98px) {
+  .market-home { padding: 28px 16px; } .market-hero, .market-grid { grid-template-columns: minmax(0, 1fr); } .market-hero { gap: 28px; padding-bottom: 36px; } .hero-workspace-card { padding: 26px; } .market-join { padding: 24px; }
+  .public-account-nav { gap: 12px; font-size: 12px; } .public-nav-cta { padding: 9px 10px; }
+  .auth-layout { grid-template-columns: minmax(0, 1fr); padding: 28px 16px; gap: 28px; } .auth-card { grid-row: 1; padding: 26px; } .auth-story { padding: 16px; } .auth-story h2 { font-size: 30px; } .auth-benefits { margin: 24px 0; }
+}

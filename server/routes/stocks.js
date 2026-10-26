@@ -11,17 +11,25 @@ const {
   createStockAnalysis,
 } = require("../controllers/stockAnalysisController");
 
+const {
+  getMarketOverview,
+} = require("../controllers/marketOverviewController");
+
 const { requireAuth } = require("../middleware/authMiddleware");
 const { stockAnalysisLimiter } = require("../middleware/rateLimiters");
 const validate = require("../middleware/validate");
 
 const {
   createStockSchema,
+  marketOverviewSchema,
   stockIdSchema,
   stockPricesSchema,
 } = require("../validations/stockSchemas");
 
 const router = express.Router();
+
+// Register before /:id so "overview" is not parsed as a stock ID.
+router.get("/overview", validate(marketOverviewSchema), getMarketOverview);
 
 router.get("/", getStocks);
 

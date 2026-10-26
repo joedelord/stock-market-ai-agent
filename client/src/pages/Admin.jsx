@@ -5,7 +5,6 @@ import api from "../services/api";
 import { getErrorMessage } from "../services/errors";
 import UserTable from "../components/admin/UserTable";
 import AddUserForm from "../components/admin/AddUserForm";
-import { Link } from "react-router";
 
 const PAGE_SIZE = 20;
 
@@ -126,7 +125,7 @@ function Admin() {
   }
 
   return (
-    <main className="mx-auto max-w-4xl p-8 text-center bg-gray-100">
+    <main id="main-content" className="mx-auto max-w-4xl p-8 text-center">
       <div className="mb-5 flex items-center justify-between">
         <h1 className="text-4xl font-bold">
           {isAdmin ? "User management" : "Users"}
@@ -200,10 +199,6 @@ function Admin() {
           </button>
         </nav>
       )}
-
-      <Link to="/dashboard" className="my-4 inline-block">
-        ← Back to dashboard
-      </Link>
     </main>
   );
 }

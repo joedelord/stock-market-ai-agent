@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router";
 
 import FormField from "../components/FormField";
-import FormPage from "../components/FormPage";
+import AuthPage from "../components/AuthPage";
 import SubmitButton from "../components/SubmitButton";
 import { useAuth } from "../context/useAuth";
 import { getErrorMessage } from "../services/errors";
@@ -24,7 +24,7 @@ function Register() {
   }
 
   if (isAuthenticated && !isSubmitting) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/stocks" replace />;
   }
 
   const handleSubmit = async (event) => {
@@ -42,7 +42,7 @@ function Register() {
     try {
       await register({ username, email, password });
 
-      navigate("/dashboard", { replace: true });
+      navigate("/stocks", { replace: true });
     } catch (error) {
       setErrorMessage(getErrorMessage(error, "Registration failed"));
     } finally {
@@ -51,7 +51,7 @@ function Register() {
   };
 
   return (
-    <FormPage title="Create account">
+    <AuthPage title="Create account" description="Start your personal watchlist and follow the market your way.">
       <form onSubmit={handleSubmit}>
         <FormField
           id="username"
@@ -117,7 +117,7 @@ function Register() {
           Log in
         </Link>
       </p>
-    </FormPage>
+    </AuthPage>
   );
 }
 

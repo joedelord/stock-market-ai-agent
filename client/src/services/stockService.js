@@ -48,3 +48,8 @@ export async function createWatchlistStock(stockId) {
 export async function deleteWatchlistStock(stockId) {
   await api.delete(`/me/stocks/${encodeURIComponent(stockId)}`);
 }
+
+export async function getMarketOverview(market = "all", { signal } = {}) {
+  const { data } = await api.get("/stocks/overview", { params: { market }, signal });
+  return data;
+}

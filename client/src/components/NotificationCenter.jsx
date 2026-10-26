@@ -100,7 +100,7 @@ function NotificationCenter() {
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((value) => !value)}
-        className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 hover:bg-gray-50"
+        className="notification-toggle flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 hover:bg-gray-50"
       >
         <svg
           aria-hidden="true"
@@ -113,7 +113,7 @@ function NotificationCenter() {
         >
           <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />
         </svg>
-        Notifications
+        <span className="notification-label">Notifications</span>
         {loaded && data.unreadCount > 0 && (
           <span
             className="rounded-full bg-blue-100 px-2 text-sm text-blue-800"
@@ -141,7 +141,7 @@ function NotificationCenter() {
               buttonRef.current?.focus();
             }
           }}
-          className="absolute right-0 z-20 mt-2 w-full rounded-xl border border-gray-200 bg-white p-4 shadow-lg sm:w-96"
+          className="notification-panel absolute right-0 z-20 mt-2 w-full rounded-xl border border-gray-200 bg-white p-4 shadow-lg sm:w-96"
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-semibold">Notifications</h2>
