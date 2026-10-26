@@ -254,7 +254,8 @@ const triggerAlerts = async (
         inserted.user_id,
         inserted.alert_id,
         inserted.message,
-        users.email
+        users.email,
+        users.email_verified_at
       FROM inserted
       JOIN users ON users.id = inserted.user_id
       ORDER BY inserted.id`,

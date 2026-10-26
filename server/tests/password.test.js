@@ -132,7 +132,8 @@ describe("Password reset", () => {
     expect(response.status).toBe(200);
 
     expect(response.body).toEqual({
-      message: "If an account exists for that email, a reset link has been sent",
+      message:
+        "If an account exists for that email, a reset link has been sent",
     });
 
     expect(sendResetEmail).not.toHaveBeenCalled();

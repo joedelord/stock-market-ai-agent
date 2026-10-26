@@ -9,6 +9,7 @@ const findUserByEmail = async (email) => {
       password_hash,
       role,
       token_version,
+      email_verified_at,
       created_at,
       updated_at
     FROM users
@@ -37,24 +38,32 @@ const findUserByUsername = async (username) => {
   return result.rows[0];
 };
 
-const createUser = async ({ username, email, passwordHash, role = "user" }) => {
+const createUser = async ({
+  username,
+  email,
+  passwordHash,
+  role = "user",
+  emailVerified = false,
+}) => {
   const result = await pool.query(
     `INSERT INTO users (
       username,
       email,
       password_hash,
-      role
+      role,
+      email_verified_at
     )
-    VALUES ($1, $2, $3, $4)
+    VALUES ($1, $2, $3, $4, CASE WHEN $5 THEN CURRENT_TIMESTAMP END)
     RETURNING
       id,
       username,
       email,
       role,
       token_version,
+      email_verified_at,
       created_at,
       updated_at`,
-    [username, email, passwordHash, role],
+    [username, email, passwordHash, role, emailVerified],
   );
 
   return result.rows[0];

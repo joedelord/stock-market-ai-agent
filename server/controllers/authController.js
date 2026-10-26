@@ -7,6 +7,8 @@ const {
   changeUserPassword,
   requestPasswordReset,
   resetPassword: resetUserPassword,
+  verifyEmail: verifyUserEmail,
+  resendEmailVerification,
 } = require("../services/userService");
 const { createToken, verifyToken } = require("../utils/token");
 
@@ -163,6 +165,30 @@ const resetPassword = async (req, res, next) => {
   }
 };
 
+const verifyEmail = async (req, res, next) => {
+  try {
+    await verifyUserEmail(req.body.token);
+
+    return res.json({
+      message: "Email verified",
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const resendVerification = async (req, res, next) => {
+  try {
+    await resendEmailVerification(req.user.id);
+
+    return res.json({
+      message: "Verification email sent",
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -171,4 +197,6 @@ module.exports = {
   changePassword,
   forgotPassword,
   resetPassword,
+  verifyEmail,
+  resendVerification,
 };

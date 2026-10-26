@@ -86,14 +86,18 @@ const checkStockAlerts = async (stock) => {
     (alert) => buildAlertMessage(stock, alert, latest.price),
   );
 
-  // The notifications are already saved, so a failed email is only logged.
+  // Only verified addresses get email, so nobody can sign a stranger up for
+  // alerts. The notifications are already saved, so a failed email is only
+  // logged.
   const results = await Promise.allSettled(
-    notifications.map((notification) =>
-      emailService.sendAlertNotificationEmail(
-        notification.email,
-        notification.message,
+    notifications
+      .filter((notification) => notification.email_verified_at)
+      .map((notification) =>
+        emailService.sendAlertNotificationEmail(
+          notification.email,
+          notification.message,
+        ),
       ),
-    ),
   );
 
   results

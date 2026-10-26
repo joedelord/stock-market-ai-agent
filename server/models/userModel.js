@@ -63,6 +63,7 @@ const getUserById = async (id) => {
       username,
       email,
       role,
+      email_verified_at,
       created_at,
       updated_at
     FROM users

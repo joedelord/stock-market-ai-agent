@@ -61,6 +61,23 @@ const sendEmail = async ({ to, subject, text, html }) => {
   });
 };
 
+const sendEmailVerificationEmail = async (email, verifyUrl) => {
+  return sendEmail({
+    to: email,
+    subject: `${APP_NAME}: confirm your email address`,
+    text: [
+      `Welcome to ${APP_NAME}!`,
+      `Confirm your email address to get stock alerts by email: ${verifyUrl}`,
+      "The link expires in 24 hours. If you did not create an account, you can ignore this email.",
+    ].join("\n\n"),
+    html: `
+      <p>Welcome to ${APP_NAME}!</p>
+      <p><a href="${escapeHtml(verifyUrl)}">Confirm your email address</a> to get stock alerts by email.</p>
+      <p>The link expires in 24 hours. If you did not create an account, you can ignore this email.</p>
+    `,
+  });
+};
+
 const sendPasswordResetEmail = async (email, resetUrl) => {
   return sendEmail({
     to: email,
@@ -112,6 +129,7 @@ const sendAlertNotificationEmail = async (email, message) => {
 
 module.exports = {
   sendEmail,
+  sendEmailVerificationEmail,
   sendPasswordResetEmail,
   sendPasswordChangedEmail,
   sendAlertNotificationEmail,
