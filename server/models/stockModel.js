@@ -198,9 +198,9 @@ const getStockQuote = async (stockId) => {
   return result.rows[0];
 };
 
-// Only stocks someone follows are fetched, so unused catalog entries
-// don't spend market data API requests.
-const getFollowedStocks = async () => {
+// Only stocks someone follows or has an active alert on are fetched, so
+// unused catalog entries don't spend market data API requests.
+const getTrackedStocks = async () => {
   const result = await pool.query(
     `SELECT
       s.id,
@@ -211,10 +211,18 @@ const getFollowedStocks = async () => {
       s.is_active
     FROM stocks s
     WHERE s.is_active = TRUE
-      AND EXISTS (
-        SELECT 1
-        FROM user_stocks us
-        WHERE us.stock_id = s.id
+      AND (
+        EXISTS (
+          SELECT 1
+          FROM user_stocks us
+          WHERE us.stock_id = s.id
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM stock_alerts a
+          WHERE a.stock_id = s.id
+            AND a.is_active = TRUE
+        )
       )
     ORDER BY s.name ASC, s.id ASC`,
   );
@@ -224,7 +232,7 @@ const getFollowedStocks = async () => {
 
 module.exports = {
   getAllStocks,
-  getFollowedStocks,
+  getTrackedStocks,
   getStockById,
   createStock,
   getStockPrices,

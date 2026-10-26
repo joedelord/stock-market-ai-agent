@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
+import NotificationCenter from "../components/NotificationCenter";
 import StockList from "../components/StockList";
 import StockChart from "../components/StockChart";
 import StockAnalysis from "../components/StockAnalysis";
@@ -214,14 +215,23 @@ function StockDashboard() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={handleRefresh}
-            disabled={isLoading || isSaving}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 disabled:cursor-wait disabled:opacity-50"
-          >
-            {isLoading ? "Loading..." : "Refresh"}
-          </button>
+          <div className="flex flex-wrap items-start gap-3">
+            <Link
+              to="/alerts"
+              className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-blue-700"
+            >
+              My alerts
+            </Link>
+            <NotificationCenter />
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={isLoading || isSaving}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 disabled:cursor-wait disabled:opacity-50"
+            >
+              {isLoading ? "Loading..." : "Refresh"}
+            </button>
+          </div>
         </header>
 
         {watchlistError && (
@@ -313,6 +323,17 @@ function StockDashboard() {
 
             {selectedStock && (
               <>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h2 className="text-xl font-semibold">
+                    {selectedStock.name}
+                  </h2>
+                  <Link
+                    to={`/alerts?stockId=${encodeURIComponent(selectedStock.id)}`}
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-white"
+                  >
+                    Create alert for {selectedStock.symbol}
+                  </Link>
+                </div>
                 <StockChart
                   stock={selectedStock}
                   prices={pricesByStockId[selectedStockId] ?? []}

@@ -7,7 +7,7 @@ function Home() {
 
   return (
     <main className="min-h-screen bg-gray-100 p-8 text-center">
-      <h1 className="text-4xl font-bold mb-5">Auth Template</h1>
+      <h1 className="text-4xl font-bold mb-5">Stock Market App</h1>
 
       {isAuthenticated ? (
         <ButtonLink to="/dashboard" className="text-xl block w-fit mx-auto">

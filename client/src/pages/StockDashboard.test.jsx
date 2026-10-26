@@ -45,6 +45,7 @@ function createRoutes(overrides = {}) {
   return {
     "GET /me/stocks": () => [200, { stocks }],
     "GET /stocks": () => [200, { stocks }],
+    "GET /notifications": () => [200, { notifications: [], unreadCount: 0 }],
 
     "GET /stocks/1/prices": () => [
       200,

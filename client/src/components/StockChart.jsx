@@ -4,6 +4,14 @@ const WIDTH = 800;
 const HEIGHT = 300;
 const PADDING = { top: 20, right: 24, bottom: 45, left: 85 };
 
+// Same as EXCHANGE_TIME_ZONES in server/config/exchangeMapping.js, so the
+// chart's trading day matches the one daily alerts use.
+const EXCHANGE_TIME_ZONES = {
+  XHEL: "Europe/Helsinki",
+  XNAS: "America/New_York",
+  XNYS: "America/New_York",
+};
+
 function formatPrice(value, currency) {
   return new Intl.NumberFormat("en-GB", {
     style: "currency",
@@ -13,8 +21,6 @@ function formatPrice(value, currency) {
 
 function formatTime(value) {
   return new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "numeric",
     hour: "2-digit",
     minute: "2-digit",
     timeZone: "Europe/Helsinki",
@@ -44,7 +50,7 @@ function StockChart({
 
   const interval = sortedPrices.at(-1)?.interval_code;
 
-  const points = sortedPrices
+  const allPoints = sortedPrices
     .filter((price) => price.interval_code === interval)
     .map((price) => ({
       time: new Date(price.price_time).getTime(),
@@ -54,6 +60,22 @@ function StockChart({
           : Number(price.close),
     }))
     .filter((point) => Number.isFinite(point.close));
+
+  // Show only the latest trading day: today once it has prices, otherwise
+  // the previous trading day.
+  const timeZone = EXCHANGE_TIME_ZONES[stock.exchange] ?? "UTC";
+  const marketDateFormat = new Intl.DateTimeFormat("en-CA", { timeZone });
+  const marketDate = allPoints.length
+    ? marketDateFormat.format(allPoints.at(-1).time)
+    : null;
+  const points = allPoints.filter(
+    (point) => marketDateFormat.format(point.time) === marketDate,
+  );
+  const tradingDay = points.length
+    ? new Intl.DateTimeFormat("en-GB", { dateStyle: "short", timeZone }).format(
+        points.at(-1).time,
+      )
+    : "";
 
   const chartWidth = WIDTH - PADDING.left - PADDING.right;
   const chartHeight = HEIGHT - PADDING.top - PADDING.bottom;
@@ -190,7 +212,7 @@ function StockChart({
           </div>
 
           <p className="mt-3 text-xs text-gray-500">
-            Closing prices of stored price points
+            Closing prices on trading day {tradingDay}
             {interval ? ` · Interval: ${interval}` : ""}
             {" · Times in Helsinki time"}
           </p>
