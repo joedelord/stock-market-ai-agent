@@ -224,7 +224,9 @@ npm run dev
 ```
 
 The Vite development server forwards `/api` requests to the backend. Run
-`npm run market:watch` in a third terminal to keep prices up to date.
+`npm run market:watch:dev` in a third terminal to keep prices up to date.
+It restarts when server code changes, like `npm run dev`. Each restart runs
+an update right away, which uses Twelve Data requests.
 
 ## Frontend pages
 
@@ -460,6 +462,9 @@ npm run market:once
 
 # Keep running and update prices on a schedule
 npm run market:watch
+
+# The same, restarting when server code changes
+npm run market:watch:dev
 ```
 
 Only tracked stocks are updated: active stocks that are on someone's
@@ -622,20 +627,21 @@ the alerts page and the notification center.
 
 ## npm scripts
 
-| Location  | Command                | Description                |
-| --------- | ---------------------- | -------------------------- |
-| `client/` | `npm run dev`          | Start Vite                 |
-| `client/` | `npm run build`        | Production build           |
-| `client/` | `npm run lint`         | ESLint                     |
-| `client/` | `npm test`             | Run tests                  |
-| `server/` | `npm run dev`          | Start with auto reload     |
-| `server/` | `npm start`            | Start                      |
-| `server/` | `npm run migrate`      | Run database migrations    |
-| `server/` | `npm run create-admin` | Create an admin user       |
-| `server/` | `npm run market:once`  | Update prices once         |
-| `server/` | `npm run market:watch` | Update prices on schedule  |
-| `server/` | `npm run seed:mock`    | Add mock stocks and prices |
-| `server/` | `npm test`             | Run tests                  |
+| Location  | Command                    | Description                |
+| --------- | -------------------------- | -------------------------- |
+| `client/` | `npm run dev`              | Start Vite                 |
+| `client/` | `npm run build`            | Production build           |
+| `client/` | `npm run lint`             | ESLint                     |
+| `client/` | `npm test`                 | Run tests                  |
+| `server/` | `npm run dev`              | Start with auto reload     |
+| `server/` | `npm start`                | Start                      |
+| `server/` | `npm run migrate`          | Run database migrations    |
+| `server/` | `npm run create-admin`     | Create an admin user       |
+| `server/` | `npm run market:once`      | Update prices once         |
+| `server/` | `npm run market:watch`     | Update prices on schedule  |
+| `server/` | `npm run market:watch:dev` | Same, with auto reload     |
+| `server/` | `npm run seed:mock`        | Add mock stocks and prices |
+| `server/` | `npm test`                 | Run tests                  |
 
 ## Production checklist
 
