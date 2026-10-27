@@ -107,6 +107,16 @@ const stockAnalysisLimiter = createLimiter({
   message: "Too many analysis requests. Please try again later.",
 });
 
+// Each search uses the shared Twelve Data quota. Keyed on the user, so it
+// must run after requireAuth.
+const stockSearchLimiter = createLimiter({
+  name: "stock-search",
+  windowMs: FIFTEEN_MINUTES,
+  limit: 30,
+  keyGenerator: (req) => String(req.user.id),
+  message: "Too many stock searches. Please try again later.",
+});
+
 module.exports = {
   loginLimiter,
   loginEmailLimiter,
@@ -117,4 +127,5 @@ module.exports = {
   emailVerificationLimiter,
   resendVerificationLimiter,
   stockAnalysisLimiter,
+  stockSearchLimiter,
 };

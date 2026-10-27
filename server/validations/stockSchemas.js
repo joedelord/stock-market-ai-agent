@@ -71,8 +71,19 @@ const marketOverviewSchema = z.object({
   }),
 });
 
+const stockSearchSchema = z.object({
+  query: z.object({
+    q: z
+      .string({ error: "Search query is required" })
+      .trim()
+      .min(1, "Search query is required")
+      .max(50, "Search query must be at most 50 characters"),
+  }),
+});
+
 module.exports = {
   marketOverviewSchema,
+  stockSearchSchema,
   stockIdField,
   createStockSchema,
   stockIdSchema,
