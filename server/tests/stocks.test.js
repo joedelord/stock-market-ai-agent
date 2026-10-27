@@ -3,10 +3,39 @@ const request = require("supertest");
 const app = require("../app");
 const pool = require("../config/db");
 const stockModel = require("../models/stockModel");
+const { createUserAccount } = require("../services/userService");
 const { clearDatabase } = require("./helpers/database");
+
+const STOCK_DATA = {
+  symbol: "AAPL",
+  exchange: "XNAS",
+  name: "Apple Inc.",
+  currency: "USD",
+};
+
+const loginAs = async (role) => {
+  await createUserAccount({
+    username: `test${role}`,
+    email: `${role}@example.com`,
+    password: "password123",
+    role,
+  });
+
+  const agent = request.agent(app);
+
+  await agent.post("/api/auth/login").send({
+    email: `${role}@example.com`,
+    password: "password123",
+  });
+
+  return agent;
+};
+
+let admin;
 
 beforeEach(async () => {
   await clearDatabase();
+  admin = await loginAs("admin");
 });
 
 afterAll(async () => {
@@ -14,16 +43,32 @@ afterAll(async () => {
 });
 
 const createStock = async (overrides = {}) => {
-  const data = {
-    symbol: "AAPL",
-    exchange: "XNAS",
-    name: "Apple Inc.",
-    currency: "USD",
-    ...overrides,
-  };
-
-  return request(app).post("/api/stocks").send(data);
+  return admin.post("/api/stocks").send({ ...STOCK_DATA, ...overrides });
 };
+
+describe("POST /api/stocks access", () => {
+  test("rejects guests", async () => {
+    const response = await request(app).post("/api/stocks").send(STOCK_DATA);
+
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({ error: "Authentication required" });
+  });
+
+  test("rejects users and moderators", async () => {
+    for (const role of ["user", "moderator"]) {
+      const agent = await loginAs(role);
+
+      const response = await agent.post("/api/stocks").send(STOCK_DATA);
+
+      expect(response.status).toBe(403);
+      expect(response.body).toEqual({ error: "Insufficient permissions" });
+    }
+
+    const result = await pool.query("SELECT id FROM stocks");
+
+    expect(result.rows).toHaveLength(0);
+  });
+});
 
 describe("Stocks API", () => {
   test("returns an empty stock list", async () => {
@@ -147,7 +192,7 @@ describe("Stocks API", () => {
   });
 
   test("rejects missing required fields", async () => {
-    const response = await request(app).post("/api/stocks").send({
+    const response = await admin.post("/api/stocks").send({
       symbol: "AAPL",
     });
 

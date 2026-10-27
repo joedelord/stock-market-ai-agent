@@ -15,7 +15,7 @@ const {
   getMarketOverview,
 } = require("../controllers/marketOverviewController");
 
-const { requireAuth } = require("../middleware/authMiddleware");
+const { requireAuth, requireRole } = require("../middleware/authMiddleware");
 const { stockAnalysisLimiter } = require("../middleware/rateLimiters");
 const validate = require("../middleware/validate");
 
@@ -45,8 +45,13 @@ router.post(
   createStockAnalysis,
 );
 
-// POST has no authentication during development.
-// Protect it before release.
-router.post("/", validate(createStockSchema), createStock);
+// The stock catalog is shared by every user, so only admins can add to it.
+router.post(
+  "/",
+  requireAuth,
+  requireRole("admin"),
+  validate(createStockSchema),
+  createStock,
+);
 
 module.exports = router;

@@ -17,9 +17,8 @@ Work in progress.
   integration with a market-hours scheduler, stock dashboard with charts,
   AI stock analysis, watchlists, price alerts with in-app and email
   notifications, email verification, market holidays and early closes in
-  the scheduler.
-- Not yet done: authentication on
-  `POST /api/stocks`, a production email provider, a stock search UI.
+  the scheduler, admin-only stock creation.
+- Not yet done: a production email provider, a stock search UI.
 
 ## Tech stack
 
@@ -262,7 +261,7 @@ while the tab is visible.
 | GET    | `/api/stocks/:id`          | Get one stock                   |
 | GET    | `/api/stocks/:id/prices`   | Get a stock and its latest bars |
 | POST   | `/api/stocks/:id/analysis` | AI analysis (login required)    |
-| POST   | `/api/stocks`              | Add a stock                     |
+| POST   | `/api/stocks`              | Add a stock (admin only)        |
 
 `GET /api/stocks/:id/prices` takes a `limit` query parameter (1–1000,
 default 100). It returns the newest prices in oldest-first order, ready for
@@ -317,10 +316,8 @@ up to five stocks each:
 
 `symbol`, `exchange` and `currency` are converted to upper case. The
 response is `201` with the new stock, or `409` if the symbol already
-exists on that exchange.
-
-> `POST /api/stocks` has no authentication yet. Protect it before
-> deploying.
+exists on that exchange. Only admins can add stocks, because the catalog is
+shared by every user: guests get `401` and other roles get `403`.
 
 ## AI stock analysis
 
@@ -660,7 +657,6 @@ the alerts page and the notification center.
 
 ## Production checklist
 
-- Protect `POST /api/stocks` with authentication
 - Set `NODE_ENV=production` and use HTTPS
 - Use a strong, unique `JWT_SECRET`
 - Use production PostgreSQL credentials and production Twelve Data and
