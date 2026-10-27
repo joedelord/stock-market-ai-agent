@@ -17,8 +17,8 @@ Work in progress.
   integration with a market-hours scheduler, stock dashboard with charts,
   AI stock analysis, watchlists, price alerts with in-app and email
   notifications, email verification, market holidays and early closes in
-  the scheduler, admin-only stock creation.
-- Not yet done: a production email provider, a stock search UI.
+  the scheduler, admin-only stock creation with a Twelve Data search UI.
+- Not yet done: a production email provider.
 
 ## Tech stack
 
@@ -238,7 +238,7 @@ an update right away, which uses Twelve Data requests.
 | `/alerts`           | logged in       | Create, edit, pause and delete alerts |
 | `/account`          | logged in       | Profile and account details           |
 | `/account/password` | logged in       | Change password                       |
-| `/admin`            | moderator/admin | User management                       |
+| `/admin`            | moderator/admin | Users; adding stocks (admin only)     |
 
 Logged-in pages share a header with navigation, the notification bell and
 an account menu (profile, password, administration, log out). Registration
@@ -258,6 +258,7 @@ while the tab is visible.
 | ------ | -------------------------- | ------------------------------- |
 | GET    | `/api/stocks`              | List stocks, sorted by name     |
 | GET    | `/api/stocks/overview`     | Public market overview          |
+| GET    | `/api/stocks/search`       | Search Twelve Data (admin only) |
 | GET    | `/api/stocks/:id`          | Get one stock                   |
 | GET    | `/api/stocks/:id/prices`   | Get a stock and its latest bars |
 | POST   | `/api/stocks/:id/analysis` | AI analysis (login required)    |
@@ -318,6 +319,41 @@ up to five stocks each:
 response is `201` with the new stock, or `409` if the symbol already
 exists on that exchange. Only admins can add stocks, because the catalog is
 shared by every user: guests get `401` and other roles get `403`.
+
+### Adding stocks from Twelve Data
+
+Admins add stocks on the `/admin` page: search by symbol or company name,
+then click **Add** on a result. The page calls
+`GET /api/stocks/search?q=nokia` (1–50 characters), which searches Twelve
+Data's `/symbol_search` and returns `{ results }`:
+
+```json
+{
+  "results": [
+    {
+      "symbol": "NOKIA",
+      "exchange": "XHEL",
+      "name": "Nokia Oyj",
+      "currency": "EUR",
+      "country": "Finland",
+      "stockId": null
+    }
+  ]
+}
+```
+
+- Only common stocks on supported exchanges are returned, with the
+  exchange as our MIC code. Twelve Data's own `mic_code` is not used,
+  because Nasdaq stocks come back as `XNGS`, `XNMS` or `XNCM`.
+- `stockId` is the stock's ID if it is already in the database, otherwise
+  `null`.
+- Each admin can search 30 times per 15 minutes, because every search uses
+  the shared Twelve Data key.
+- Errors: `503` without `TWELVE_DATA_API_KEY`, `502` if Twelve Data returns
+  an error, `504` if it does not answer within 15 seconds.
+
+A new stock gets prices only once someone follows it or creates an alert
+on it, because the price job updates tracked stocks only.
 
 ## AI stock analysis
 

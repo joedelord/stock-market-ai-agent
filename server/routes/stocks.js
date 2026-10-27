@@ -5,6 +5,7 @@ const {
   getStockById,
   createStock,
   getStockPrices,
+  searchProviderStocks,
 } = require("../controllers/stockController");
 
 const {
@@ -16,7 +17,10 @@ const {
 } = require("../controllers/marketOverviewController");
 
 const { requireAuth, requireRole } = require("../middleware/authMiddleware");
-const { stockAnalysisLimiter } = require("../middleware/rateLimiters");
+const {
+  stockAnalysisLimiter,
+  stockSearchLimiter,
+} = require("../middleware/rateLimiters");
 const validate = require("../middleware/validate");
 
 const {
@@ -24,12 +28,23 @@ const {
   marketOverviewSchema,
   stockIdSchema,
   stockPricesSchema,
+  stockSearchSchema,
 } = require("../validations/stockSchemas");
 
 const router = express.Router();
 
-// Register before /:id so "overview" is not parsed as a stock ID.
+// Register before /:id so "overview" and "search" are not parsed as stock IDs.
 router.get("/overview", validate(marketOverviewSchema), getMarketOverview);
+
+// Searches Twelve Data, not the database, so admins can find stocks to add.
+router.get(
+  "/search",
+  requireAuth,
+  requireRole("admin"),
+  stockSearchLimiter,
+  validate(stockSearchSchema),
+  searchProviderStocks,
+);
 
 router.get("/", getStocks);
 

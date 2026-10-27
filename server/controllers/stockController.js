@@ -1,4 +1,5 @@
 const stockModel = require("../models/stockModel");
+const stockSearchService = require("../services/stockSearchService");
 
 const UNIQUE_VIOLATION = "23505";
 
@@ -80,9 +81,22 @@ const getStockPrices = async (req, res, next) => {
   }
 };
 
+const searchProviderStocks = async (req, res, next) => {
+  try {
+    const results = await stockSearchService.searchProviderStocks(
+      req.validatedQuery.q,
+    );
+
+    return res.json({ results });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 module.exports = {
   getStocks,
   getStockById,
   createStock,
   getStockPrices,
+  searchProviderStocks,
 };

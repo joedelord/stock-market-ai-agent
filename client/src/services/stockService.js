@@ -23,6 +23,19 @@ export async function getStockPrices(id, { limit, signal } = {}) {
   return data;
 }
 
+// Searches Twelve Data, not the database. Admin only.
+export async function searchProviderStocks(q, { signal } = {}) {
+  const { data } = await api.get("/stocks/search", { params: { q }, signal });
+
+  return data.results;
+}
+
+export async function createStock(stock) {
+  const { data } = await api.post("/stocks", stock);
+
+  return data.stock;
+}
+
 export async function createStockAnalysis(id, { signal } = {}) {
   const { data } = await api.post(
     `/stocks/${encodeURIComponent(id)}/analysis`,

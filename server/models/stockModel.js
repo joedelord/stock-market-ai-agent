@@ -56,6 +56,23 @@ const createStock = async ({ symbol, exchange, name, currency }) => {
   return result.rows[0];
 };
 
+// Returns the stocks that match any of the given symbol and exchange pairs.
+const getStocksBySymbolAndExchange = async (pairs) => {
+  const result = await pool.query(
+    `SELECT
+      s.id,
+      s.symbol,
+      s.exchange
+    FROM stocks s
+    JOIN UNNEST($1::text[], $2::text[]) AS pair(symbol, exchange)
+      ON s.symbol = pair.symbol
+      AND s.exchange = pair.exchange`,
+    [pairs.map((pair) => pair.symbol), pairs.map((pair) => pair.exchange)],
+  );
+
+  return result.rows;
+};
+
 // Fetches the newest prices and returns them oldest first for charting.
 // Without an interval, the limit counts rows of every interval together.
 const getStockPrices = async (stockId, limit = 100, interval = null) => {
@@ -234,6 +251,7 @@ module.exports = {
   getAllStocks,
   getTrackedStocks,
   getStockById,
+  getStocksBySymbolAndExchange,
   createStock,
   getStockPrices,
   saveStockPrices,

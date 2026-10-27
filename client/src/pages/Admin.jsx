@@ -5,6 +5,7 @@ import api from "../services/api";
 import { getErrorMessage } from "../services/errors";
 import UserTable from "../components/admin/UserTable";
 import AddUserForm from "../components/admin/AddUserForm";
+import StockSearch from "../components/admin/StockSearch";
 
 const PAGE_SIZE = 20;
 
@@ -199,6 +200,8 @@ function Admin() {
           </button>
         </nav>
       )}
+
+      {isAdmin && <StockSearch />}
     </main>
   );
 }
