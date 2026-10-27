@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { useAuth } from "../context/useAuth";
+import EmailVerificationBanner from "./EmailVerificationBanner";
 import NotificationCenter from "./NotificationCenter";
 import { getErrorMessage } from "../services/errors";
 
@@ -65,6 +66,7 @@ export default function AppLayout() {
           </div>
         </div>
       </header>
+      <EmailVerificationBanner />
       {error && <p role="alert" className="mx-auto max-w-7xl p-4 text-red-700">{error}</p>}
       <Outlet />
       <footer className="app-footer">Stock Market AI · Your personal market workspace</footer>

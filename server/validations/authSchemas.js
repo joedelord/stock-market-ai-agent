@@ -43,11 +43,19 @@ const forgotPasswordSchema = z.object({
   }),
 });
 
+const tokenField = (message) => z.string().regex(/^[0-9a-f]{64}$/, message);
+
 const resetPasswordSchema = z.object({
   body: z.object({
-    token: z.string().regex(/^[0-9a-f]{64}$/, "Invalid reset token"),
+    token: tokenField("Invalid reset token"),
 
     password: newPasswordField,
+  }),
+});
+
+const verifyEmailSchema = z.object({
+  body: z.object({
+    token: tokenField("Invalid verification link"),
   }),
 });
 
@@ -57,4 +65,5 @@ module.exports = {
   changePasswordSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  verifyEmailSchema,
 };

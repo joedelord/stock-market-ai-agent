@@ -80,6 +80,23 @@ const changePasswordLimiter = createLimiter({
   message: "Too many password change attempts. Please try again later.",
 });
 
+const emailVerificationLimiter = createLimiter({
+  name: "email-verification",
+  windowMs: ONE_HOUR,
+  limit: 10,
+  message: "Too many verification attempts. Please try again later.",
+});
+
+// Stops one inbox from being flooded with verification emails. Keyed on the
+// user, so it must run after requireAuth.
+const resendVerificationLimiter = createLimiter({
+  name: "resend-verification",
+  windowMs: ONE_HOUR,
+  limit: 3,
+  keyGenerator: (req) => String(req.user.id),
+  message: "Too many verification emails requested. Please try again later.",
+});
+
 // Each analysis is a paid AI request, so one user cannot use up the shared
 // provider quota. Keyed on the user, so it must run after requireAuth.
 const stockAnalysisLimiter = createLimiter({
@@ -97,5 +114,7 @@ module.exports = {
   passwordResetLimiter,
   passwordResetEmailLimiter,
   changePasswordLimiter,
+  emailVerificationLimiter,
+  resendVerificationLimiter,
   stockAnalysisLimiter,
 };

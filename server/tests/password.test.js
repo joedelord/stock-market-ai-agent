@@ -2,7 +2,7 @@ const request = require("supertest");
 
 const app = require("../app");
 const pool = require("../config/db");
-const mailer = require("../utils/mailer");
+const emailService = require("../services/emailService");
 
 const { clearDatabase } = require("./helpers/database");
 
@@ -13,12 +13,16 @@ const credentials = {
 };
 
 let sendResetEmail;
+let sendChangedEmail;
 
 beforeEach(async () => {
   await clearDatabase();
 
   sendResetEmail = vi
-    .spyOn(mailer, "sendPasswordResetEmail")
+    .spyOn(emailService, "sendPasswordResetEmail")
+    .mockResolvedValue();
+  sendChangedEmail = vi
+    .spyOn(emailService, "sendPasswordChangedEmail")
     .mockResolvedValue();
 });
 
@@ -70,6 +74,8 @@ describe("Password change", () => {
 
     expect((await login("password123")).status).toBe(401);
     expect((await login("newpassword456")).status).toBe(200);
+
+    expect(sendChangedEmail).toHaveBeenCalledWith(credentials.email);
   });
 
   test("rejects an incorrect current password", async () => {
@@ -86,6 +92,8 @@ describe("Password change", () => {
     expect(response.body).toEqual({
       error: "Current password is incorrect",
     });
+
+    expect(sendChangedEmail).not.toHaveBeenCalled();
   });
 
   test("requires authentication", async () => {
@@ -124,7 +132,8 @@ describe("Password reset", () => {
     expect(response.status).toBe(200);
 
     expect(response.body).toEqual({
-      message: "If an account exists for that email, a reset link has been sent",
+      message:
+        "If an account exists for that email, a reset link has been sent",
     });
 
     expect(sendResetEmail).not.toHaveBeenCalled();

@@ -1,6 +1,7 @@
 const pool = require("../config/db");
 const alertModel = require("../models/alertModel");
 const stockModel = require("../models/stockModel");
+const emailService = require("../services/emailService");
 const {
   buildAlertMessage,
   checkStockAlerts,
@@ -10,6 +11,7 @@ const { clearDatabase } = require("./helpers/database");
 
 let user;
 let stock;
+let sendAlertEmail;
 
 // 14:00 in New York on Thursday 2026-10-22.
 const BAR_TIME = "2026-10-22 18:00:00";
@@ -72,11 +74,16 @@ const getNotifications = async () => {
 beforeEach(async () => {
   await clearDatabase();
 
+  sendAlertEmail = vi
+    .spyOn(emailService, "sendAlertNotificationEmail")
+    .mockResolvedValue();
+
   user = await createUserAccount({
     username: "alice",
     email: "alice@example.com",
     password: "password123",
     role: "user",
+    emailVerified: true,
   });
 
   stock = await stockModel.createStock({
@@ -85,6 +92,10 @@ beforeEach(async () => {
     name: "Apple",
     currency: "USD",
   });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 afterAll(async () => {
@@ -96,6 +107,51 @@ describe("Alert triggers", () => {
     await createAlert();
 
     expect(await checkStockAlerts(stock)).toEqual([]);
+    expect(sendAlertEmail).not.toHaveBeenCalled();
+  });
+
+  test("emails the user when an alert fires", async () => {
+    await createAlert();
+
+    await saveBar(stock, BAR_TIME, "105");
+
+    await checkStockAlerts(stock);
+
+    expect(sendAlertEmail).toHaveBeenCalledWith(
+      "alice@example.com",
+      "AAPL (XNAS) is at 105.00 USD, at or above your alert of 100 USD.",
+    );
+  });
+
+  test("does not email a user whose address is not verified", async () => {
+    const unverified = await createUserAccount({
+      username: "bob",
+      email: "bob@example.com",
+      password: "password123",
+      role: "user",
+    });
+
+    await alertModel.createAlert(unverified.id, {
+      stockId: stock.id,
+      alertType: "price_above",
+      threshold: 100,
+      repeatMode: "once",
+    });
+
+    await saveBar(stock, BAR_TIME, "105");
+
+    expect(await checkStockAlerts(stock)).toHaveLength(1);
+    expect(sendAlertEmail).not.toHaveBeenCalled();
+  });
+
+  test("keeps the notification when the email fails", async () => {
+    await createAlert();
+    sendAlertEmail.mockRejectedValue(new Error("SMTP down"));
+
+    await saveBar(stock, BAR_TIME, "105");
+
+    expect(await checkStockAlerts(stock)).toHaveLength(1);
+    expect(await getNotifications()).toHaveLength(1);
   });
 
   test("fires a price_above alert once and switches it off", async () => {
@@ -159,7 +215,9 @@ describe("Alert triggers", () => {
     expect(await checkStockAlerts(stock)).toHaveLength(1);
 
     expect(
-      (await getNotifications()).map((notification) => notification.market_date),
+      (await getNotifications()).map(
+        (notification) => notification.market_date,
+      ),
     ).toEqual(["2026-10-22", "2026-10-23"]);
   });
 

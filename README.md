@@ -15,9 +15,10 @@ Work in progress.
 
 - Done: authentication, user management, stocks REST API, Twelve Data
   integration with a market-hours scheduler, stock dashboard with charts,
-  AI stock analysis, watchlists, price alerts and in-app notifications.
+  AI stock analysis, watchlists, price alerts with in-app and email
+  notifications, email verification.
 - Not yet done: market holidays in the scheduler, authentication on
-  `POST /api/stocks`, a real email provider, a stock search UI.
+  `POST /api/stocks`, a production email provider, a stock search UI.
 
 ## Tech stack
 
@@ -190,6 +191,7 @@ npm run create-admin
 
 The script asks for a username, email, and password. When not running in a
 terminal, pass the password in the `ADMIN_PASSWORD` environment variable.
+Admins created this way start with a verified email address.
 
 ### Mock data
 
@@ -222,7 +224,9 @@ npm run dev
 ```
 
 The Vite development server forwards `/api` requests to the backend. Run
-`npm run market:watch` in a third terminal to keep prices up to date.
+`npm run market:watch:dev` in a third terminal to keep prices up to date.
+It restarts when server code changes, like `npm run dev`. Each restart runs
+an update right away, which uses Twelve Data requests.
 
 ## Frontend pages
 
@@ -458,6 +462,9 @@ npm run market:once
 
 # Keep running and update prices on a schedule
 npm run market:watch
+
+# The same, restarting when server code changes
+npm run market:watch:dev
 ```
 
 Only tracked stocks are updated: active stocks that are on someone's
@@ -494,20 +501,34 @@ session on every device.
 
 ### Auth endpoints
 
-| Method | Endpoint                    | Description                  |
-| ------ | --------------------------- | ---------------------------- |
-| POST   | `/api/auth/register`        | Register a user              |
-| POST   | `/api/auth/login`           | Log in                       |
-| POST   | `/api/auth/logout`          | Log out                      |
-| GET    | `/api/auth/me`              | Return the current user      |
-| PATCH  | `/api/auth/password`        | Change the password          |
-| POST   | `/api/auth/forgot-password` | Request a password reset     |
-| POST   | `/api/auth/reset-password`  | Set a new password by token  |
+| Method | Endpoint                        | Description                  |
+| ------ | ------------------------------- | ---------------------------- |
+| POST   | `/api/auth/register`            | Register a user              |
+| POST   | `/api/auth/login`               | Log in                       |
+| POST   | `/api/auth/logout`              | Log out                      |
+| GET    | `/api/auth/me`                  | Return the current user      |
+| PATCH  | `/api/auth/password`            | Change the password          |
+| POST   | `/api/auth/forgot-password`     | Request a password reset     |
+| POST   | `/api/auth/reset-password`      | Set a new password by token  |
+| POST   | `/api/auth/verify-email`        | Verify the email by token    |
+| POST   | `/api/auth/resend-verification` | Send a new verification link |
 
 Reset links point to `CLIENT_ORIGIN/reset-password?token=...`, expire after
-one hour, and work once. Email delivery is a placeholder in
-`server/utils/mailer.js` that prints the link to the console outside
-production. Connect a real email provider before deploying.
+one hour, and work once.
+
+Registering sends a verification link to
+`CLIENT_ORIGIN/verify-email?token=...`, which expires after 24 hours and
+works once. Unverified users can log in and use the app, and they see
+in-app notifications, but alert emails only go to verified addresses.
+Requesting a new link replaces the old one.
+
+### Email
+
+`server/services/emailService.js` sends email over SMTP using the `SMTP_*`
+and `MAIL_FROM` variables. Locally, run [Mailpit](https://mailpit.axllent.org/)
+(SMTP on port 1025, inbox at http://localhost:8025) and send one of each
+email with `npm run email:test -- you@example.com`. Without `SMTP_HOST`,
+development only logs emails. Tests never send email.
 
 ### Roles and user endpoints
 
@@ -529,8 +550,9 @@ demoted or deleted.
 ### Rate limits
 
 Login is limited per IP address and, for failed attempts, per email.
-Registration, password reset requests, password changes and AI analysis
-are limited too. Counters are stored in PostgreSQL, so limits hold across
+Registration, password reset requests, password changes, email
+verification and AI analysis are limited too. Counters are stored in
+PostgreSQL, so limits hold across
 server instances. Rate limits are off when `NODE_ENV=test`.
 
 ## Other server features
@@ -605,20 +627,21 @@ the alerts page and the notification center.
 
 ## npm scripts
 
-| Location  | Command                | Description                |
-| --------- | ---------------------- | -------------------------- |
-| `client/` | `npm run dev`          | Start Vite                 |
-| `client/` | `npm run build`        | Production build           |
-| `client/` | `npm run lint`         | ESLint                     |
-| `client/` | `npm test`             | Run tests                  |
-| `server/` | `npm run dev`          | Start with auto reload     |
-| `server/` | `npm start`            | Start                      |
-| `server/` | `npm run migrate`      | Run database migrations    |
-| `server/` | `npm run create-admin` | Create an admin user       |
-| `server/` | `npm run market:once`  | Update prices once         |
-| `server/` | `npm run market:watch` | Update prices on schedule  |
-| `server/` | `npm run seed:mock`    | Add mock stocks and prices |
-| `server/` | `npm test`             | Run tests                  |
+| Location  | Command                    | Description                |
+| --------- | -------------------------- | -------------------------- |
+| `client/` | `npm run dev`              | Start Vite                 |
+| `client/` | `npm run build`            | Production build           |
+| `client/` | `npm run lint`             | ESLint                     |
+| `client/` | `npm test`                 | Run tests                  |
+| `server/` | `npm run dev`              | Start with auto reload     |
+| `server/` | `npm start`                | Start                      |
+| `server/` | `npm run migrate`          | Run database migrations    |
+| `server/` | `npm run create-admin`     | Create an admin user       |
+| `server/` | `npm run market:once`      | Update prices once         |
+| `server/` | `npm run market:watch`     | Update prices on schedule  |
+| `server/` | `npm run market:watch:dev` | Same, with auto reload     |
+| `server/` | `npm run seed:mock`        | Add mock stocks and prices |
+| `server/` | `npm test`                 | Run tests                  |
 
 ## Production checklist
 
@@ -629,7 +652,7 @@ the alerts page and the notification center.
   Groq keys
 - Set `CLIENT_ORIGIN` to the real frontend domain
 - Check cookie settings and the `trust proxy` setting
-- Connect a real email provider in `server/utils/mailer.js`
+- Point the `SMTP_*` variables at a real email provider
 - Run `npm run market:watch` as a long-running process next to the server
 - Run both test suites and the frontend production build
 - Keep `.env` files out of Git

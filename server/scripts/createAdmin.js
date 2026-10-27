@@ -95,7 +95,10 @@ const createAdmin = async () => {
       return;
     }
 
-    const user = await createUserAccount(result.data.body);
+    const user = await createUserAccount({
+      ...result.data.body,
+      emailVerified: true,
+    });
 
     console.log(`Created admin ${user.username} (${user.email})`);
   } catch (error) {
