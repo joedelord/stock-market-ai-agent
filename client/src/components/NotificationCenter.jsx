@@ -100,7 +100,7 @@ function NotificationCenter() {
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((value) => !value)}
-        className="notification-toggle flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 hover:bg-gray-50"
+        className="notification-toggle flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-1.5 hover:bg-gray-50"
       >
         <svg
           aria-hidden="true"

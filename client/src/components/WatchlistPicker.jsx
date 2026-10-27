@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
+import { Plus, X } from "lucide-react";
+
 import { getStocks } from "../services/stockService";
 import { getErrorMessage } from "../services/errors";
 
@@ -94,9 +96,13 @@ function WatchlistPicker({ stocks, onAdd, disabled }) {
         aria-controls="add-stock-panel"
         aria-label={isOpen ? "Close add to watchlist" : "Add to watchlist"}
         title={isOpen ? "Close" : "Add to watchlist"}
-        className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-2xl leading-none text-white transition-colors hover:bg-blue-700"
+        className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-white transition-colors hover:bg-blue-700"
       >
-        <span aria-hidden="true">{isOpen ? "×" : "+"}</span>
+        {isOpen ? (
+          <X aria-hidden="true" className="h-4.5 w-4.5" />
+        ) : (
+          <Plus aria-hidden="true" className="h-4.5 w-4.5" />
+        )}
       </button>
 
       {isOpen && (
@@ -180,8 +186,8 @@ function WatchlistPicker({ stocks, onAdd, disabled }) {
 
           {matches.length > MAX_RESULTS && (
             <p className="mt-2 text-sm text-gray-500">
-              Showing the first {MAX_RESULTS} matches. Refine your search to
-              see more.
+              Showing the first {MAX_RESULTS} matches. Refine your search to see
+              more.
             </p>
           )}
         </section>
