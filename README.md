@@ -16,8 +16,9 @@ Work in progress.
 - Done: authentication, user management, stocks REST API, Twelve Data
   integration with a market-hours scheduler, stock dashboard with charts,
   AI stock analysis, watchlists, price alerts with in-app and email
-  notifications, email verification.
-- Not yet done: market holidays in the scheduler, authentication on
+  notifications, email verification, market holidays and early closes in
+  the scheduler.
+- Not yet done: authentication on
   `POST /api/stocks`, a production email provider, a stock search UI.
 
 ## Tech stack
@@ -58,7 +59,8 @@ stock-market-ai-agent/
 │       └── test/              Test setup and API mocks
 │
 ├── server/                    Express API
-│   ├── config/                Environment, database pool, exchange mapping
+│   ├── config/                Environment, database pool, exchange mapping,
+│   │                          market holiday calendar
 │   ├── controllers/           Request handlers (auth, users, stocks,
 │   │                          analysis, watchlist, alerts, notifications)
 │   ├── jobs/                  Price update job and market scheduler
@@ -444,9 +446,11 @@ local time zones. Supported exchanges:
 | `XNYS` | `NYSE`      | New York (NYSE) |
 
 Add a line to `PROVIDER_EXCHANGES` and `EXCHANGE_TIME_ZONES` to support
-another exchange, and to `MARKET_HOURS` in
+another exchange, to `MARKET_HOURS` in
 [server/jobs/marketScheduler.js](server/jobs/marketScheduler.js) for the
-scheduler to update it.
+scheduler to update it, and to `MARKET_CALENDAR` in
+[server/config/marketCalendar.js](server/config/marketCalendar.js) for its
+holidays.
 
 Try the integration from `server/`:
 
@@ -479,10 +483,21 @@ result per stock and exits with code 1 if any price fetch failed.
 `market:watch` ([server/scripts/startMarketScheduler.js](server/scripts/startMarketScheduler.js),
 schedule in [server/jobs/marketScheduler.js](server/jobs/marketScheduler.js))
 updates once at startup, then every 15 minutes on weekdays while New York
-(09:30-16:15 local time) or Helsinki (10:00-18:45 local time) is open. Each
-run only updates stocks on the exchanges that are open at that time. The
-extra 15 minutes after each close saves the last bar of the day. Market
-holidays are not handled yet. A tracked stock costs about 35-45 requests a
+(09:30-16:00 local time) or Helsinki (10:00-18:30 local time) is open. Each
+run only updates stocks on the exchanges that are open at that time. One
+more run 15 minutes after each close saves the last bar of the day.
+
+Holidays and early closes come from
+[server/config/marketCalendar.js](server/config/marketCalendar.js), listed
+per exchange and year in the exchange's local dates. A US holiday only
+stops Nasdaq and NYSE, and a Helsinki holiday only stops Helsinki. On an
+early close (for example 13:00 on the day after Thanksgiving) the last run
+is 15 minutes after the early close. If an exchange has no calendar for
+the current year, the scheduler logs a warning once and uses normal hours.
+A test fails when next year's calendar is missing, so add it each autumn
+from the sources linked in the file.
+
+A tracked stock costs about 35-45 requests a
 day (one price request per run plus an hourly quote), so the free plan's
 800 requests per day covers about 18 stocks. On `SIGTERM` or `SIGINT` it
 finishes the current stock, closes the database pool and exits, or forces
@@ -654,5 +669,6 @@ the alerts page and the notification center.
 - Check cookie settings and the `trust proxy` setting
 - Point the `SMTP_*` variables at a real email provider
 - Run `npm run market:watch` as a long-running process next to the server
+- Add next year's holidays to `server/config/marketCalendar.js` each autumn
 - Run both test suites and the frontend production build
 - Keep `.env` files out of Git
