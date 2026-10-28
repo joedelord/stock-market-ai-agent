@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
+import AppHeader from "../components/AppHeader";
 import PublicHeader from "../components/PublicHeader";
 import { useAuth } from "../context/useAuth";
 import { getErrorMessage } from "../services/errors";
@@ -219,7 +220,11 @@ function Home() {
 
   return (
     <div className="app-shell">
-      <PublicHeader isAuthenticated={isAuthenticated} isLoading={authLoading} />
+      {isAuthenticated && !authLoading ? (
+        <AppHeader />
+      ) : (
+        <PublicHeader isLoading={authLoading} />
+      )}
 
       <main id="main-content" className="market-home">
         <MarketHero isAuthenticated={isAuthenticated} />

@@ -217,6 +217,7 @@ function StockAnalysis({ stock }) {
               <dd className="inline">
                 {formatTime(result.analysis.generatedAt)}
                 {" (Helsinki time)"}
+                {result.cached && " · reused, because the price data and news have not changed since"}
               </dd>
             </div>
           </dl>

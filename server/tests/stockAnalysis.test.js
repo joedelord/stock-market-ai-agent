@@ -249,4 +249,114 @@ describe("Stock analysis", () => {
       error: "AI analysis service returned an error.",
     });
   });
+
+  test("reuses a stored analysis while the input is unchanged", async () => {
+    await saveQuarterHourPrices(stock.id, 3);
+
+    const agent = await loginAsUser();
+
+    const first = await agent.post(`/api/stocks/${stock.id}/analysis`);
+    const second = await agent.post(`/api/stocks/${stock.id}/analysis`);
+
+    expect(first.body.cached).toBe(false);
+    expect(second.status).toBe(200);
+    expect(second.body.cached).toBe(true);
+    expect(second.body.analysis).toEqual(first.body.analysis);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  test("creates a new analysis when a new price bar arrives", async () => {
+    await saveQuarterHourPrices(stock.id, 3);
+
+    const agent = await loginAsUser();
+
+    await agent.post(`/api/stocks/${stock.id}/analysis`);
+    await saveQuarterHourPrices(stock.id, 4);
+    const response = await agent.post(`/api/stocks/${stock.id}/analysis`);
+
+    expect(response.body.cached).toBe(false);
+    expect(response.body.metrics.pointCount).toBe(4);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("does not reuse an analysis after it expires", async () => {
+    await saveQuarterHourPrices(stock.id, 3);
+
+    const agent = await loginAsUser();
+
+    await agent.post(`/api/stocks/${stock.id}/analysis`);
+    await pool.query(
+      "UPDATE stock_analyses SET created_at = NOW() - INTERVAL '31 minutes'",
+    );
+    const response = await agent.post(`/api/stocks/${stock.id}/analysis`);
+
+    expect(response.body.cached).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("shares one AI request between simultaneous identical requests", async () => {
+    await saveQuarterHourPrices(stock.id, 3);
+
+    // Keeps the first Groq call open while the second request arrives.
+    fetchMock.mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve(groqResponse()), 500)),
+    );
+
+    const agent = await loginAsUser();
+
+    const responses = await Promise.all([
+      agent.post(`/api/stocks/${stock.id}/analysis`),
+      agent.post(`/api/stocks/${stock.id}/analysis`),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([200, 200]);
+    expect(responses.map((response) => response.body.cached).sort()).toEqual([false, true]);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  test("does not store failed analyses", async () => {
+    await saveQuarterHourPrices(stock.id, 3);
+
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      headers: new Headers(),
+      json: vi.fn().mockResolvedValue({}),
+    });
+
+    const agent = await loginAsUser();
+
+    const failed = await agent.post(`/api/stocks/${stock.id}/analysis`);
+    const retried = await agent.post(`/api/stocks/${stock.id}/analysis`);
+
+    expect(failed.status).toBe(502);
+    expect(retried.status).toBe(200);
+    expect(retried.body.cached).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("does not store an analysis written during a news outage", async () => {
+    await saveQuarterHourPrices(stock.id, 3);
+    await saveStockQuote(stock.id, {
+      priceTime: "2026-10-19T14:00:00.000Z", close: 97, previousClose: 100,
+    });
+    vi.stubEnv("MARKETAUX_API_KEY", "test-news-key");
+
+    fetchMock.mockImplementation((url) =>
+      String(url).startsWith("https://api.marketaux.com")
+        ? Promise.reject(new Error("News provider down"))
+        : Promise.resolve(groqResponse()),
+    );
+
+    const agent = await loginAsUser();
+
+    const first = await agent.post(`/api/stocks/${stock.id}/analysis`);
+    const second = await agent.post(`/api/stocks/${stock.id}/analysis`);
+
+    expect(first.body.news.status).toBe("unavailable");
+    expect(second.body.cached).toBe(false);
+
+    const { rows } = await pool.query("SELECT COUNT(*)::int AS count FROM stock_analyses");
+    expect(rows[0].count).toBe(0);
+  });
 });

@@ -4,7 +4,7 @@ const {
   calculateDailyVolatility,
   calculateDayMovement,
 } = require("../services/stockMetrics");
-const { generateStockAnalysis } = require("../services/groqService");
+const { getOrCreateStockAnalysis } = require("../services/stockAnalysisService");
 const { getStockNews } = require("../services/stockNewsService");
 
 const ANALYSIS_PRICE_LIMIT = 100;
@@ -56,7 +56,7 @@ const createStockAnalysis = async (req, res, next) => {
 
     const news = await getStockNews({ stock, dayMovement: metrics.dayMovement });
 
-    const analysis = await generateStockAnalysis({
+    const { analysis, cached } = await getOrCreateStockAnalysis({
       stock,
       metrics,
       news,
@@ -68,6 +68,7 @@ const createStockAnalysis = async (req, res, next) => {
       stock,
       metrics,
       analysis,
+      cached,
       news,
     });
   } catch (error) {

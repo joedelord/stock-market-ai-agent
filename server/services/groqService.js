@@ -1,3 +1,5 @@
+const crypto = require("crypto");
+
 const HttpError = require("../utils/httpError");
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
@@ -86,6 +88,36 @@ const incompleteResponseError = (cause) =>
     { cause },
   );
 
+const buildUserContent = ({ stock, metrics, news }) =>
+  JSON.stringify({
+    stock: {
+      symbol: stock.symbol,
+      exchange: stock.exchange,
+      name: stock.name,
+      currency: stock.currency,
+    },
+    metrics,
+    news,
+  });
+
+// Same key means Groq would get the exact same request, so a stored answer
+// can be reused. Prompt, model and settings are included, so changing any of
+// them invalidates earlier answers.
+const getAnalysisCacheKey = (input) =>
+  crypto
+    .createHash("sha256")
+    .update(
+      JSON.stringify([
+        SYSTEM_PROMPT,
+        process.env.GROQ_MODEL?.trim() ?? null,
+        process.env.GROQ_REASONING_EFFORT?.trim() ?? null,
+        MAX_COMPLETION_TOKENS,
+        TEMPERATURE,
+        buildUserContent(input),
+      ]),
+    )
+    .digest("hex");
+
 const generateStockAnalysis = async ({ stock, metrics, news }) => {
   const apiKey = process.env.GROQ_API_KEY?.trim();
   const model = process.env.GROQ_MODEL?.trim();
@@ -105,16 +137,7 @@ const generateStockAnalysis = async ({ stock, metrics, news }) => {
       },
       {
         role: "user",
-        content: JSON.stringify({
-          stock: {
-            symbol: stock.symbol,
-            exchange: stock.exchange,
-            name: stock.name,
-            currency: stock.currency,
-          },
-          metrics,
-          news,
-        }),
+        content: buildUserContent({ stock, metrics, news }),
       },
     ],
     max_completion_tokens: MAX_COMPLETION_TOKENS,
@@ -213,4 +236,5 @@ const generateStockAnalysis = async ({ stock, metrics, news }) => {
 
 module.exports = {
   generateStockAnalysis,
+  getAnalysisCacheKey,
 };

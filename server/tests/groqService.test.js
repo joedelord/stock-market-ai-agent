@@ -1,4 +1,7 @@
-const { generateStockAnalysis } = require("../services/groqService");
+const {
+  generateStockAnalysis,
+  getAnalysisCacheKey,
+} = require("../services/groqService");
 
 const stock = {
   id: 1,
@@ -123,6 +126,21 @@ describe("Groq Service", () => {
     const payload = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(JSON.parse(payload.messages[1].content).news).toEqual(news);
     expect(payload.messages[0].content).toContain("untrusted data");
+  });
+
+  test("cache key changes only when the Groq request would change", () => {
+    const news = { status: "not_requested", articles: [] };
+    const key = getAnalysisCacheKey({ stock, metrics, news });
+
+    expect(key).toMatch(/^[0-9a-f]{64}$/);
+    // Fields Groq never sees, like the stock ID, don't change the key.
+    expect(getAnalysisCacheKey({ stock: { ...stock, id: 2 }, metrics, news })).toBe(key);
+    expect(
+      getAnalysisCacheKey({ stock, metrics: { ...metrics, latestClose: 111 }, news }),
+    ).not.toBe(key);
+
+    vi.stubEnv("GROQ_MODEL", "other-model");
+    expect(getAnalysisCacheKey({ stock, metrics, news })).not.toBe(key);
   });
 
   test.each(["GROQ_API_KEY", "GROQ_MODEL"])(

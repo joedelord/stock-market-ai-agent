@@ -114,6 +114,15 @@ describe("StockAnalysis", () => {
     ).toBeInTheDocument();
   });
 
+  it("says when an analysis was reused", async () => {
+    const user = userEvent.setup();
+    const result = { ...createAnalysis("Unchanged analysis."), cached: true };
+    mockApi({ "POST /stocks/1/analysis": () => [200, result] });
+    render(<StockAnalysis stock={stock} />);
+    await user.click(screen.getByRole("button", { name: "Analyze" }));
+    expect(await screen.findByText(/reused, because the price data and news have not changed/)).toBeInTheDocument();
+  });
+
   it("shows company news links and publication times", async () => {
     const user = userEvent.setup();
     const result = createAnalysis("Possible news context [1].");
