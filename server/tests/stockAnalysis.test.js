@@ -40,7 +40,15 @@ const groqResponse = () => ({
     choices: [
       {
         finish_reason: "stop",
-        message: { content: "Price rose over the supplied period." },
+        message: {
+          content: JSON.stringify({
+            priceMovement: "Price rose over the supplied period.",
+            movingAverages: "Too few points for moving averages.",
+            newsContext: "News was not requested.",
+            limitations: "The data may be incomplete.",
+            citedArticles: [],
+          }),
+        },
       },
     ],
   }),
@@ -130,7 +138,11 @@ describe("Stock analysis", () => {
     });
 
     expect(response.body.analysis).toMatchObject({
-      text: "Price rose over the supplied period.",
+      sections: {
+        priceMovement: "Price rose over the supplied period.",
+        limitations: "The data may be incomplete.",
+      },
+      citedArticles: [],
       model: "test-model",
     });
 

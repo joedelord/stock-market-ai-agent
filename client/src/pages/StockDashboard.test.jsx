@@ -244,7 +244,13 @@ describe("StockDashboard", () => {
               periodEnd: "2026-10-19T13:45:00.000Z",
             },
             analysis: {
-              text: "Apple rose over the period.",
+              sections: {
+                priceMovement: "Apple rose over the period.",
+                movingAverages: "Too few points for moving averages.",
+                newsContext: "News was not requested.",
+                limitations: "The data may be incomplete.",
+              },
+              citedArticles: [],
               model: "test-model",
               generatedAt: "2026-10-19T14:00:00.000Z",
             },

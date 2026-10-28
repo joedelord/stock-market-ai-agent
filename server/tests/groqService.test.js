@@ -27,7 +27,17 @@ const metrics = {
   sma50: null,
 };
 
-const successfulResponse = (overrides = {}) => ({
+const analysisContent = (overrides = {}) =>
+  JSON.stringify({
+    priceMovement: "  Price increased over the supplied period.  ",
+    movingAverages: "Too few points for SMA20 and SMA50.",
+    newsContext: "News was not requested.",
+    limitations: "The data may be incomplete.",
+    citedArticles: [],
+    ...overrides,
+  });
+
+const successfulResponse = (overrides = {}, content = analysisContent()) => ({
   ok: true,
   status: 200,
   json: vi.fn().mockResolvedValue({
@@ -35,14 +45,20 @@ const successfulResponse = (overrides = {}) => ({
     choices: [
       {
         finish_reason: "stop",
-        message: {
-          content: "  Price increased over the supplied period.  ",
-        },
+        message: { content },
       },
     ],
     ...overrides,
   }),
 });
+
+const availableNews = {
+  status: "available",
+  articles: [
+    { number: 1, title: "First", url: "https://example.com/1" },
+    { number: 2, title: "Second", url: "https://example.com/2" },
+  ],
+};
 
 // Without errorBody, the body is not JSON, like an HTML error page from a proxy.
 const failedResponse = (status, { headers = {}, errorBody } = {}) => ({
@@ -111,8 +127,16 @@ describe("Groq Service", () => {
       metrics,
     });
 
+    expect(body.response_format).toEqual({ type: "json_object" });
+
     expect(result).toMatchObject({
-      text: "Price increased over the supplied period.",
+      sections: {
+        priceMovement: "Price increased over the supplied period.",
+        movingAverages: "Too few points for SMA20 and SMA50.",
+        newsContext: "News was not requested.",
+        limitations: "The data may be incomplete.",
+      },
+      citedArticles: [],
       model: "test-model",
     });
 
@@ -126,6 +150,58 @@ describe("Groq Service", () => {
     const payload = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(JSON.parse(payload.messages[1].content).news).toEqual(news);
     expect(payload.messages[0].content).toContain("untrusted data");
+  });
+
+  test("returns validated article citations", async () => {
+    fetchMock.mockResolvedValue(
+      successfulResponse({}, analysisContent({
+        newsContext: "A product launch [2] may be related.",
+        citedArticles: [2],
+      })),
+    );
+
+    const result = await generateStockAnalysis({ stock, metrics, news: availableNews });
+
+    expect(result.citedArticles).toEqual([2]);
+  });
+
+  test("adds citations that appear only in the text", async () => {
+    fetchMock.mockResolvedValue(
+      successfulResponse({}, analysisContent({ newsContext: "See [1].", citedArticles: [] })),
+    );
+
+    const result = await generateStockAnalysis({ stock, metrics, news: availableNews });
+
+    expect(result.citedArticles).toEqual([1]);
+  });
+
+  const threeArticles = {
+    ...availableNews,
+    articles: [...availableNews.articles, { number: 3, title: "Third", url: "https://example.com/3" }],
+  };
+
+  test.each([
+    ["an unknown article number", analysisContent({ newsContext: "See [3].", citedArticles: [3] }), availableNews],
+    ["a citation without available news", analysisContent({ citedArticles: [1] }), { status: "no_results", articles: [] }],
+    ["too many citations", analysisContent({ newsContext: "[1] [2] [3]", citedArticles: [1, 2, 3] }), threeArticles],
+    ["a missing section", analysisContent({ limitations: undefined }), availableNews],
+    ["an empty section", analysisContent({ movingAverages: "  " }), availableNews],
+  ])("rejects %s", async (_label, content, news) => {
+    fetchMock.mockResolvedValue(successfulResponse({}, content));
+
+    await expect(generateStockAnalysis({ stock, metrics, news })).rejects.toMatchObject({
+      status: 502,
+      message: "AI analysis service returned an invalid response.",
+    });
+  });
+
+  test("rejects a response that is not JSON", async () => {
+    fetchMock.mockResolvedValue(successfulResponse({}, "Plain text analysis."));
+
+    await expect(generateStockAnalysis({ stock, metrics })).rejects.toMatchObject({
+      status: 502,
+      message: "AI analysis service returned an invalid response.",
+    });
   });
 
   test("cache key changes only when the Groq request would change", () => {

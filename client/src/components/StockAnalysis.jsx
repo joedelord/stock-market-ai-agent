@@ -12,6 +12,13 @@ const INTERVAL_LABELS = {
   "1day": "daily",
 };
 
+const ANALYSIS_SECTIONS = [
+  ["priceMovement", "Price movement"],
+  ["movingAverages", "Moving averages"],
+  ["newsContext", "Possible news context"],
+  ["limitations", "Limitations"],
+];
+
 function formatInterval(interval) {
   return INTERVAL_LABELS[interval] ?? interval;
 }
@@ -153,9 +160,16 @@ function StockAnalysis({ stock }) {
             <p className="text-sm text-gray-500">Day change unavailable: no valid stored quote.</p>
           )}
 
-          <p className="whitespace-pre-wrap wrap-break-word leading-relaxed text-gray-800">
-            {result.analysis.text}
-          </p>
+          <div className="space-y-3">
+            {ANALYSIS_SECTIONS.map(([key, title]) => (
+              <div key={key}>
+                <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
+                <p className="whitespace-pre-wrap wrap-break-word leading-relaxed text-gray-800">
+                  {result.analysis.sections[key]}
+                </p>
+              </div>
+            ))}
+          </div>
 
           {result.news && (
             <div className="space-y-2 border-t border-gray-100 pt-4 text-sm">
@@ -175,6 +189,7 @@ function StockAnalysis({ stock }) {
                       </a>
                       <p className="text-xs text-gray-500">
                         {article.source} · {formatTime(article.publishedAt)} (Helsinki time)
+                        {result.analysis.citedArticles.includes(article.number) && " · cited in the analysis"}
                       </p>
                     </li>
                   ))}

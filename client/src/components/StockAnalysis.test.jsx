@@ -25,7 +25,13 @@ function createAnalysis(text) {
       periodEnd: "2026-10-20T20:00:00.000Z",
     },
     analysis: {
-      text,
+      sections: {
+        priceMovement: text,
+        movingAverages: "Too few points for moving averages.",
+        newsContext: "News was not requested.",
+        limitations: "The data may be incomplete.",
+      },
+      citedArticles: [],
       model: "test-model",
       generatedAt: "2026-10-20T20:05:00.000Z",
     },
@@ -125,10 +131,15 @@ describe("StockAnalysis", () => {
 
   it("shows company news links and publication times", async () => {
     const user = userEvent.setup();
-    const result = createAnalysis("Possible news context [1].");
+    const result = createAnalysis("Price fell.");
+    result.analysis.sections.newsContext = "Possible news context [1].";
+    result.analysis.citedArticles = [1];
     result.news = { status: "available", articles: [{
-      title: "Company announcement", url: "https://example.com/news",
+      number: 1, title: "Company announcement", url: "https://example.com/news",
       source: "Example", publishedAt: "2026-10-20T19:00:00Z",
+    }, {
+      number: 2, title: "Other story", url: "https://example.com/other",
+      source: "Example", publishedAt: "2026-10-20T18:00:00Z",
     }] };
     mockApi({ "POST /stocks/1/analysis": () => [200, result] });
     render(<StockAnalysis stock={stock} />);
@@ -136,7 +147,10 @@ describe("StockAnalysis", () => {
     const link = await screen.findByRole("link", { name: "Company announcement" });
     expect(link).toHaveAttribute("href", "https://example.com/news");
     expect(link).toHaveAttribute("rel", "noopener noreferrer");
-    expect(screen.getByText(/Example · 20 Oct 2026, 22:00/)).toBeInTheDocument();
+    expect(screen.getByText(/Example · 20 Oct 2026, 22:00.*cited in the analysis/)).toBeInTheDocument();
+    expect(screen.getByText(/Example · 20 Oct 2026, 21:00/)).not.toHaveTextContent("cited");
+    expect(screen.getByRole("heading", { name: "Possible news context" })).toBeInTheDocument();
+    expect(screen.getByText("Possible news context [1].")).toBeInTheDocument();
   });
 
   it.each([
