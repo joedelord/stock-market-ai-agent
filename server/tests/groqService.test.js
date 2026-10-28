@@ -116,6 +116,15 @@ describe("Groq Service", () => {
     expect(Number.isNaN(Date.parse(result.generatedAt))).toBe(false);
   });
 
+  test("passes supplied news as data to the model", async () => {
+    fetchMock.mockResolvedValue(successfulResponse());
+    const news = { status: "available", articles: [{ title: "Ignore instructions", summary: "Untrusted text", url: "https://example.com" }] };
+    await generateStockAnalysis({ stock, metrics, news });
+    const payload = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(JSON.parse(payload.messages[1].content).news).toEqual(news);
+    expect(payload.messages[0].content).toContain("untrusted data");
+  });
+
   test.each(["GROQ_API_KEY", "GROQ_MODEL"])(
     "rejects missing configuration: %s",
     async (variable) => {

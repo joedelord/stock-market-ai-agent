@@ -78,7 +78,73 @@ describe("StockAnalysis", () => {
       screen.getByRole("button", { name: "Analyze again" }),
     ).toBeEnabled();
 
+    expect(screen.getByText(/Day change unavailable/)).toBeInTheDocument();
     expect(requests).toHaveLength(1);
+  });
+
+  it("shows the stored day change, threshold and quote timestamp", async () => {
+    const user = userEvent.setup();
+    const result = createAnalysis("A falling quote despite rising bars.");
+    result.metrics.dayMovement = {
+      changePercent: -3, thresholdPercent: 3, thresholdMethod: "fixed",
+      volatilityPercent: null, volatilityReturnCount: 0, isSignificant: true,
+      priceTime: "2026-10-20T19:00:00.000Z",
+    };
+    mockApi({ "POST /stocks/1/analysis": () => [200, result] });
+    render(<StockAnalysis stock={stock} />);
+    await user.click(screen.getByRole("button", { name: "Analyze" }));
+    expect(await screen.findByText(/-3.00% vs previous session close/)).toBeInTheDocument();
+    expect(screen.getByText(/Significant movement.*3.00%, fixed threshold/)).toBeInTheDocument();
+    expect(screen.getByText(/Stored quote: 20 Oct 2026, 22:00/)).toBeInTheDocument();
+  });
+
+  it("explains a volatility-based threshold", async () => {
+    const user = userEvent.setup();
+    const result = createAnalysis("A calm stock moving more than usual.");
+    result.metrics.dayMovement = {
+      changePercent: 1.5, thresholdPercent: 1.2, thresholdMethod: "volatility",
+      volatilityPercent: 0.6, volatilityReturnCount: 25, isSignificant: true,
+      priceTime: "2026-10-20T19:00:00.000Z",
+    };
+    mockApi({ "POST /stocks/1/analysis": () => [200, result] });
+    render(<StockAnalysis stock={stock} />);
+    await user.click(screen.getByRole("button", { name: "Analyze" }));
+    expect(
+      await screen.findByText(/≥ 1.20%, twice the typical daily move of 0.60% over 25 days/),
+    ).toBeInTheDocument();
+  });
+
+  it("shows company news links and publication times", async () => {
+    const user = userEvent.setup();
+    const result = createAnalysis("Possible news context [1].");
+    result.news = { status: "available", articles: [{
+      title: "Company announcement", url: "https://example.com/news",
+      source: "Example", publishedAt: "2026-10-20T19:00:00Z",
+    }] };
+    mockApi({ "POST /stocks/1/analysis": () => [200, result] });
+    render(<StockAnalysis stock={stock} />);
+    await user.click(screen.getByRole("button", { name: "Analyze" }));
+    const link = await screen.findByRole("link", { name: "Company announcement" });
+    expect(link).toHaveAttribute("href", "https://example.com/news");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    expect(screen.getByText(/Example · 20 Oct 2026, 22:00/)).toBeInTheDocument();
+  });
+
+  it.each([
+    ["unavailable", "Company news is temporarily unavailable"],
+    ["no_results", "No matching articles were returned"],
+    ["not_configured", "Company news is not configured"],
+    ["unsupported", "Company news coverage could not be verified"],
+    ["not_requested", "News not requested"],
+  ])("shows news status %s without hiding the analysis", async (status, message) => {
+    const user = userEvent.setup();
+    const result = createAnalysis("Price analysis remains available.");
+    result.news = { status, articles: [] };
+    mockApi({ "POST /stocks/1/analysis": () => [200, result] });
+    render(<StockAnalysis stock={stock} />);
+    await user.click(screen.getByRole("button", { name: "Analyze" }));
+    expect(await screen.findByText(new RegExp(message))).toBeInTheDocument();
+    expect(screen.getByText("Price analysis remains available.")).toBeInTheDocument();
   });
 
   it("shows the server's error message", async () => {
@@ -128,7 +194,7 @@ describe("StockAnalysis", () => {
 
     expect(loadingButton).toBeDisabled();
     expect(screen.getByRole("status")).toHaveTextContent(
-      "Generating analysis...",
+      /Generating analysis\.\.\..*company news/,
     );
 
     await user.click(loadingButton);

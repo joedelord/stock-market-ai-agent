@@ -3,7 +3,7 @@ const request = require("supertest");
 const app = require("../app");
 const pool = require("../config/db");
 
-const { createStock, saveStockPrices } = require("../models/stockModel");
+const { createStock, saveStockPrices, saveStockQuote } = require("../models/stockModel");
 const { createUserAccount } = require("../services/userService");
 const { clearDatabase } = require("./helpers/database");
 
@@ -73,6 +73,7 @@ describe("Stock analysis", () => {
 
     vi.stubEnv("GROQ_API_KEY", "test-api-key");
     vi.stubEnv("GROQ_MODEL", "test-model");
+    vi.stubEnv("MARKETAUX_API_KEY", "");
 
     fetchMock = vi.fn().mockResolvedValue(groqResponse());
     vi.stubGlobal("fetch", fetchMock);
@@ -133,6 +134,27 @@ describe("Stock analysis", () => {
       model: "test-model",
     });
 
+    expect(response.body.metrics.dayMovement).toBeNull();
+    expect(response.body.news.status).toBe("not_requested");
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  test("passes the stored day movement to Groq independently of interval changes", async () => {
+    await saveQuarterHourPrices(stock.id, 3);
+    await saveStockQuote(stock.id, {
+      priceTime: "2026-10-19T14:00:00.000Z", close: 97, previousClose: 100,
+    });
+    const agent = await loginAsUser();
+    const response = await agent.post(`/api/stocks/${stock.id}/analysis`);
+    expect(response.status).toBe(200);
+    expect(response.body.metrics.dayMovement).toMatchObject({
+      changePercent: -3, isSignificant: true, direction: "down",
+    });
+    expect(response.body.metrics.latestChangePercent).toBeGreaterThan(0);
+    expect(response.body.news.status).toBe("not_configured");
+    const payload = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(JSON.parse(payload.messages[1].content).metrics.dayMovement)
+      .toEqual(response.body.metrics.dayMovement);
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
