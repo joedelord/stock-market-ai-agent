@@ -138,6 +138,9 @@ Other options:
 - `GROQ_REASONING_EFFORT` is optional. `none` turns off reasoning so the
   answer fits the 500-token limit. Allowed values depend on the model, so
   leave it unset if unsure.
+- `MARKETAUX_API_KEY` is optional. It enables company news in the AI
+  analysis for significant day moves; without it the analysis says news
+  is not configured.
 
 The server refuses to start if `JWT_SECRET` or the database settings are
 missing. `TWELVE_DATA_API_KEY` is only needed to fetch market data.
@@ -176,6 +179,7 @@ only once.
 | `user_stocks`           | Each user's watchlist                           |
 | `stock_alerts`          | Users' price and day change alert rules         |
 | `notifications`         | Messages created when an alert triggers         |
+| `stock_analyses`        | AI analyses and the metrics and news they used  |
 
 `stocks.exchange` holds the ISO 10383 MIC code of the exchange (for
 example `XHEL`, `XNAS`, `XNYS`). `stock_prices` is unique by stock,
@@ -365,10 +369,24 @@ plain English:
    [server/services/stockMetrics.js](server/services/stockMetrics.js):
    covered period, latest and period change, minimum and maximum close,
    SMA20 and SMA50 (`null` when there are too few points).
-3. Sends the stock and metrics to Groq
+3. Compares the stored quote with the previous session close
+   (`metrics.dayMovement`, `null` without a valid quote). The move is
+   significant when it is at least twice the stock's typical daily move,
+   estimated from up to 60 earlier days of bars, with a 1% minimum. With
+   fewer than 10 days of history a fixed 3% is used instead.
+4. For a significant move, fetches up to three company articles from
+   Marketaux published in the 72 hours before the quote
+   ([server/services/stockNewsService.js](server/services/stockNewsService.js)).
+   Only XHEL, XNAS and XNYS listings are supported, and a ticker must match
+   exactly one company. `news.status` says why there are no articles
+   (`not_requested`, `not_configured`, `unsupported`, `unavailable` or
+   `no_results`).
+5. Sends the stock, metrics and news to Groq
    ([server/services/groqService.js](server/services/groqService.js)). The
-   prompt allows only the supplied data: no news, predictions or buy/sell
-   advice.
+   prompt allows only the supplied data, treats news as untrusted text, and
+   bans predictions and buy/sell advice. The answer has four sections and
+   may cite up to two of the supplied articles as `[1]`, `[2]`; a citation
+   of an article that was not supplied is rejected.
 
 The response is `{ stock, metrics, analysis, cached, stale, news }`, where
 `analysis` has `sections`, `citedArticles`, `model` and `generatedAt`. An
@@ -380,9 +398,23 @@ hours is returned instead of a `503`, with `stale: true`. `metrics` and
 `news` are then the ones that analysis was written from, so its numbers and
 citations match.
 
+An answer that cannot be used (a missing section, an unknown citation, or
+JSON that Groq itself rejects) is requested once more before the request
+fails. Each Groq call logs one line: `Groq analysis generated` with the
+model, attempt, duration and token usage, or `Groq analysis attempt failed`
+with the reason and `willRetry`. A stale fallback logs `Groq busy, returned
+a stale analysis`.
+
 `npm run eval:analysis` in `server/` runs fixed scenarios against the real
-model and checks the answers, including that every decimal and percentage
-matches a supplied value.
+model and checks the answers: no advice or forecasts, no causes stated as
+fact, no data described as live, no prompt text copied into the answer, and
+every decimal and percentage matching a supplied value. Each request
+reserves 500 output tokens of the free tier's 1000 a minute, so scenarios
+run 30 seconds apart:
+
+```bash
+npm run eval:analysis -- --only=no-quote,news-available --verbose
+```
 
 Each user can request 10 analyses per 15 minutes. Errors:
 
@@ -392,11 +424,12 @@ Each user can request 10 analyses per 15 minutes. Errors:
 | `409`  | Stock is inactive, so its prices are no longer updated       |
 | `422`  | Fewer than two valid price points                            |
 | `429`  | Too many analysis requests                                   |
-| `502`  | Groq unreachable, or returned an error or incomplete answer  |
-| `503`  | AI not configured, or Groq is busy (sent with `Retry-After`) |
+| `502`  | Groq unreachable, returned an error, or two unusable answers |
+| `503`  | AI not configured, or Groq busy and no stale analysis        |
 | `504`  | Groq did not answer within 30 seconds                        |
 
-Groq's own error details go to the server log only.
+A busy `503` is sent with `Retry-After` when Groq provides one. Groq's own
+error details go to the server log only.
 
 ## Watchlist
 
