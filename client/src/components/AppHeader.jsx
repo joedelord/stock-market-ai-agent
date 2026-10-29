@@ -70,7 +70,9 @@ export default function AppHeader() {
                 }
               }}
             >
+              {/* Long usernames are cut with an ellipsis on small screens. */}
               <summary
+                title={user?.username}
                 className={
                   ["/account", "/admin"].some((path) =>
                     location.pathname.startsWith(path),

@@ -99,6 +99,11 @@
   font-size: 14px;
 }
 .account-menu summary {
+  display: block;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   cursor: pointer;
   padding: 10px;
   border: 1px solid #435575;
@@ -166,8 +171,11 @@
 .stock-detail-panel {
   min-width: 0;
 }
+/* An implicit grid column grows to the chart's min-width, which pushed the
+   chart and AI analysis past the screen edge on phones. */
 .stock-detail-panel {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
 }
 .stock-count {
@@ -284,7 +292,6 @@
   }
   .account-menu summary {
     max-width: 130px;
-    overflow-wrap: anywhere;
   }
 }
 
