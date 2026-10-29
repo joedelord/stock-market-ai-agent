@@ -56,7 +56,7 @@ const runAnalysisEval = async () => {
 
       try {
         analysis = await generateWithRetry(scenario.input);
-        failures = checkAnalysis(analysis, scenario.expect);
+        failures = checkAnalysis(analysis, scenario.expect, scenario.input);
       } catch (error) {
         // Invalid JSON or citations are rejected by groqService, which also
         // counts as a failed scenario.

@@ -75,6 +75,42 @@ describe("Analysis checks", () => {
     ]);
   });
 
+  describe("number check", () => {
+    const input = {
+      metrics: {
+        latestClose: 104,
+        periodChangePercent: 3.8723,
+        sma20: 1234.5678,
+        dayMovement: { changePercent: -3.5 },
+      },
+      news: {
+        articles: [{ title: "Apple cuts forecast by 7.5%", summary: "" }],
+      },
+    };
+
+    test("accepts supplied numbers at any rounding, sign or format", () => {
+      const text =
+        "The price rose 3.87% (about 3.9 percent, or 4%) to 104.00, and fell 3.5% on " +
+        "2026-10-20 at 19:45. SMA20 is 1,234.57 over 50 points [1]. A 7.5% cut was reported.";
+
+      expect(checkAnalysis(analysis({ priceMovement: text }), {}, input)).toEqual([]);
+    });
+
+    test("flags numbers that are not in the supplied data", () => {
+      const text = "The price rose 4.2% to 104.50, and 3.86% over the period.";
+
+      expect(checkAnalysis(analysis({ priceMovement: text }), {}, input)).toEqual([
+        'Number not in the supplied data: "4.2%"',
+        'Number not in the supplied data: "104.50"',
+        'Number not in the supplied data: "3.86%"',
+      ]);
+    });
+
+    test("is skipped without the input", () => {
+      expect(checkAnalysis(analysis({ priceMovement: "It rose 9.99%." }))).toEqual([]);
+    });
+  });
+
   test("scenarios have unique names and numbered articles", () => {
     const names = SCENARIOS.map((scenario) => scenario.name);
 

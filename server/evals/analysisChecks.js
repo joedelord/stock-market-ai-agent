@@ -23,20 +23,69 @@ const HEDGE_PATTERN = /\b(may|might|could|possibl[ey]|perhaps|unclear|not (prove
 // The prompt says the quote is not live and not necessarily today's move.
 const LIVE_PATTERN = /\b(today|currently trading|right now|real-time|live price)\b/i;
 
+// A number with an optional % sign, but not digits that belong to a word
+// (SMA20), a date (2026-10-17), a time (19:45) or a citation ([1]).
+const NUMBER_PATTERN = /(?<![\w.:,[])(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?(?![\w:\-\]])(\s?%|\s?percent)?/gi;
+
 const countWords = (text) => text.split(/\s+/).filter(Boolean).length;
+
+const readNumbers = (text) =>
+  [...text.matchAll(NUMBER_PATTERN)].map(([match, whole, decimals, percent]) => ({
+    text: match.trim(),
+    value: Number(`${whole.replaceAll(",", "")}.${decimals ?? "0"}`),
+    decimals: decimals?.length ?? 0,
+    isPercent: Boolean(percent),
+  }));
+
+const collectNumbers = (value) => {
+  if (typeof value === "number") return Number.isFinite(value) ? [value] : [];
+  if (Array.isArray(value)) return value.flatMap(collectNumbers);
+  if (value && typeof value === "object") return Object.values(value).flatMap(collectNumbers);
+
+  return [];
+};
+
+// Metrics are unrounded, so a written number passes if it is any supplied
+// value rounded to the shown precision. Signs are ignored, because "fell
+// 3.5%" describes -3.5. Plain integers are skipped: they are mostly dates,
+// counts and periods. Numbers quoted from articles are allowed too.
+const findUnsupportedNumbers = (text, input) => {
+  const articleText = (input.news?.articles ?? [])
+    .map((article) => `${article.title} ${article.summary}`)
+    .join(" ");
+  const supplied = [
+    ...collectNumbers(input.metrics),
+    ...readNumbers(articleText).map((number) => number.value),
+  ].map(Math.abs);
+
+  return readNumbers(text)
+    .filter((number) => number.decimals > 0 || number.isPercent)
+    .filter((number) => {
+      const tolerance = 0.5 * 10 ** -number.decimals + 1e-9;
+      return !supplied.some((value) => Math.abs(value - number.value) <= tolerance);
+    })
+    .map((number) => number.text);
+};
 
 const splitSentences = (text) => text.split(/(?<=[.!?])\s+/);
 
 const allText = (sections) => Object.values(sections).join("\n");
 
 // Returns a list of human-readable failures; empty means the analysis passed.
-const checkAnalysis = (analysis, expectations = {}) => {
+// With the model input, numbers are also checked against the supplied data.
+const checkAnalysis = (analysis, expectations = {}, input = null) => {
   const failures = [];
   const { sections, citedArticles } = analysis;
   const text = allText(sections);
 
   const words = countWords(text);
   if (words > MAX_WORDS) failures.push(`Too long: ${words} words (max ${MAX_WORDS})`);
+
+  if (input) {
+    findUnsupportedNumbers(text, input).forEach((number) => {
+      failures.push(`Number not in the supplied data: "${number}"`);
+    });
+  }
 
   ADVICE_PATTERNS.forEach((pattern) => {
     const match = text.match(pattern);
