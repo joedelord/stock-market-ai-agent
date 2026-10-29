@@ -249,6 +249,9 @@ const generateStockAnalysis = async ({ stock, metrics, news }) => {
         { cause },
       );
       error.retryAfter = response.headers.get("retry-after") ?? undefined;
+      // Lets callers tell a busy provider apart from other 503s, because
+      // Groq does not always send Retry-After.
+      error.rateLimited = true;
 
       throw error;
     }

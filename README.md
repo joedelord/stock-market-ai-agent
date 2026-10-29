@@ -370,8 +370,19 @@ plain English:
    prompt allows only the supplied data: no news, predictions or buy/sell
    advice.
 
-The response is `{ stock, metrics, analysis }`, where `analysis` has
-`text`, `model` and `generatedAt`. Results are not cached.
+The response is `{ stock, metrics, analysis, cached, stale, news }`, where
+`analysis` has `sections`, `citedArticles`, `model` and `generatedAt`. An
+analysis is stored in `stock_analyses` and reused for 30 minutes while its
+exact Groq input is unchanged (`cached: true`).
+
+When Groq is busy, the newest stored analysis of the stock from the last 6
+hours is returned instead of a `503`, with `stale: true`. `metrics` and
+`news` are then the ones that analysis was written from, so its numbers and
+citations match.
+
+`npm run eval:analysis` in `server/` runs fixed scenarios against the real
+model and checks the answers, including that every decimal and percentage
+matches a supplied value.
 
 Each user can request 10 analyses per 15 minutes. Errors:
 

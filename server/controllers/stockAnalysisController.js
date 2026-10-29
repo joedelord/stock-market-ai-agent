@@ -56,7 +56,7 @@ const createStockAnalysis = async (req, res, next) => {
 
     const news = await getStockNews({ stock, dayMovement: metrics.dayMovement });
 
-    const { analysis, cached } = await getOrCreateStockAnalysis({
+    const result = await getOrCreateStockAnalysis({
       stock,
       metrics,
       news,
@@ -66,10 +66,11 @@ const createStockAnalysis = async (req, res, next) => {
 
     return res.json({
       stock,
-      metrics,
-      analysis,
-      cached,
-      news,
+      metrics: result.metrics,
+      analysis: result.analysis,
+      cached: result.cached,
+      stale: result.stale,
+      news: result.news,
     });
   } catch (error) {
     return next(error);

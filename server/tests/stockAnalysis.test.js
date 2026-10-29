@@ -148,6 +148,7 @@ describe("Stock analysis", () => {
 
     expect(response.body.metrics.dayMovement).toBeNull();
     expect(response.body.news.status).toBe("not_requested");
+    expect(response.body.stale).toBe(false);
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
@@ -324,6 +325,70 @@ describe("Stock analysis", () => {
     expect(responses.map((response) => response.status)).toEqual([200, 200]);
     expect(responses.map((response) => response.body.cached).sort()).toEqual([false, true]);
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  describe("when Groq is busy", () => {
+    const busyResponse = () => ({
+      ok: false,
+      status: 429,
+      headers: new Headers(),
+      json: vi.fn().mockResolvedValue({ error: { message: "Rate limit reached" } }),
+    });
+
+    test("returns the latest analysis with the data it was written from", async () => {
+      await saveQuarterHourPrices(stock.id, 3);
+
+      const agent = await loginAsUser();
+
+      const first = await agent.post(`/api/stocks/${stock.id}/analysis`);
+      await saveQuarterHourPrices(stock.id, 4);
+      fetchMock.mockResolvedValueOnce(busyResponse());
+      const response = await agent.post(`/api/stocks/${stock.id}/analysis`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.stale).toBe(true);
+      expect(response.body.cached).toBe(true);
+      expect(response.body.analysis).toEqual(first.body.analysis);
+      expect(response.body.metrics).toEqual(first.body.metrics);
+      expect(response.body.news).toEqual(first.body.news);
+      expect(response.body.metrics.pointCount).toBe(3);
+    });
+
+    test("does not return an analysis older than six hours", async () => {
+      await saveQuarterHourPrices(stock.id, 3);
+
+      const agent = await loginAsUser();
+
+      await agent.post(`/api/stocks/${stock.id}/analysis`);
+      await pool.query(
+        "UPDATE stock_analyses SET created_at = NOW() - INTERVAL '7 hours'",
+      );
+      fetchMock.mockResolvedValueOnce(busyResponse());
+      const response = await agent.post(`/api/stocks/${stock.id}/analysis`);
+
+      expect(response.status).toBe(503);
+      expect(response.body).toEqual({
+        error: "AI analysis is temporarily busy. Please try again later.",
+      });
+    });
+
+    test("does not use stored analyses for other errors", async () => {
+      await saveQuarterHourPrices(stock.id, 3);
+
+      const agent = await loginAsUser();
+
+      await agent.post(`/api/stocks/${stock.id}/analysis`);
+      await saveQuarterHourPrices(stock.id, 4);
+      fetchMock.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        headers: new Headers(),
+        json: vi.fn().mockResolvedValue({}),
+      });
+      const response = await agent.post(`/api/stocks/${stock.id}/analysis`);
+
+      expect(response.status).toBe(502);
+    });
   });
 
   test("does not store failed analyses", async () => {

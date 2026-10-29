@@ -249,6 +249,7 @@ describe("Groq Service", () => {
       status: 503,
       expose: true,
       message: "AI analysis is temporarily busy. Please try again later.",
+      rateLimited: true,
     });
   });
 

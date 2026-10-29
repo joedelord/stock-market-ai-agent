@@ -129,6 +129,18 @@ describe("StockAnalysis", () => {
     expect(await screen.findByText(/reused, because the price data and news have not changed/)).toBeInTheDocument();
   });
 
+  it("warns that an earlier analysis is shown while the AI service is busy", async () => {
+    const user = userEvent.setup();
+    const result = { ...createAnalysis("Earlier analysis."), cached: true, stale: true };
+    mockApi({ "POST /stocks/1/analysis": () => [200, result] });
+    render(<StockAnalysis stock={stock} />);
+    await user.click(screen.getByRole("button", { name: "Analyze" }));
+    expect(
+      await screen.findByText(/AI service is busy, so this is an earlier analysis from 20 Oct 2026, 23:05/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/reused, because/)).not.toBeInTheDocument();
+  });
+
   it("shows company news links and publication times", async () => {
     const user = userEvent.setup();
     const result = createAnalysis("Price fell.");

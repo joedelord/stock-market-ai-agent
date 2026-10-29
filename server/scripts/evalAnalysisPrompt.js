@@ -19,7 +19,7 @@ const generateWithRetry = async (input) => {
   try {
     return await generateStockAnalysis(input);
   } catch (error) {
-    if (error.retryAfter === undefined && !/busy/i.test(error.message)) throw error;
+    if (!error.rateLimited) throw error;
 
     const seconds = Number(error.retryAfter) || DEFAULT_RETRY_AFTER_SECONDS;
     console.log(`  Groq is busy, retrying in ${seconds}s...`);

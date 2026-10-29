@@ -133,6 +133,18 @@ function StockAnalysis({ stock }) {
 
       {result && (
         <div className="mt-6 space-y-4">
+          {result.stale && (
+            <p
+              role="status"
+              className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
+            >
+              The AI service is busy, so this is an earlier analysis from{" "}
+              {formatTime(result.analysis.generatedAt)} (Helsinki time). It
+              and the figures below describe the price data and news at that
+              time, not the latest prices. Try again in a minute.
+            </p>
+          )}
+
           {result.metrics.dayMovement ? (
             <div className="rounded-lg border border-gray-200 p-3 text-sm text-gray-700">
               <p>
@@ -232,7 +244,7 @@ function StockAnalysis({ stock }) {
               <dd className="inline">
                 {formatTime(result.analysis.generatedAt)}
                 {" (Helsinki time)"}
-                {result.cached && " · reused, because the price data and news have not changed since"}
+                {result.cached && !result.stale && " · reused, because the price data and news have not changed since"}
               </dd>
             </div>
           </dl>
