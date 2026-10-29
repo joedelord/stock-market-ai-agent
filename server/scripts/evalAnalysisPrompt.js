@@ -1,5 +1,8 @@
 require("../config/env");
 
+// Keeps a log line per Groq call out of the report; retries still show.
+process.env.LOG_LEVEL ||= "warn";
+
 const { generateStockAnalysis } = require("../services/groqService");
 const { checkAnalysis } = require("../evals/analysisChecks");
 const { SCENARIOS } = require("../evals/analysisScenarios");

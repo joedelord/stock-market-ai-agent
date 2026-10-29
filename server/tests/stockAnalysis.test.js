@@ -6,6 +6,7 @@ const pool = require("../config/db");
 const { createStock, saveStockPrices, saveStockQuote } = require("../models/stockModel");
 const { createUserAccount } = require("../services/userService");
 const { clearDatabase } = require("./helpers/database");
+const logger = require("../utils/logger");
 
 const START_TIME = Date.parse("2026-10-19T13:30:00.000Z");
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
@@ -97,6 +98,7 @@ describe("Stock analysis", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
+    vi.restoreAllMocks();
   });
 
   afterAll(async () => {
@@ -337,6 +339,7 @@ describe("Stock analysis", () => {
     });
 
     test("returns the latest analysis with the data it was written from", async () => {
+      const info = vi.spyOn(logger, "info");
       await saveQuarterHourPrices(stock.id, 3);
 
       const agent = await loginAsUser();
@@ -353,6 +356,10 @@ describe("Stock analysis", () => {
       expect(response.body.metrics).toEqual(first.body.metrics);
       expect(response.body.news).toEqual(first.body.news);
       expect(response.body.metrics.pointCount).toBe(3);
+      expect(info).toHaveBeenCalledWith(
+        expect.objectContaining({ stockId: stock.id }),
+        "Groq busy, returned a stale analysis",
+      );
     });
 
     test("does not return an analysis older than six hours", async () => {

@@ -2,6 +2,7 @@ const {
   generateStockAnalysis,
   getAnalysisCacheKey,
 } = require("../services/groqService");
+const logger = require("../utils/logger");
 
 const stock = {
   id: 1,
@@ -85,6 +86,7 @@ describe("Groq Service", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
+    vi.restoreAllMocks();
   });
 
   test("sends stock metrics and returns a trimmed analysis", async () => {
@@ -272,6 +274,61 @@ describe("Groq Service", () => {
       message: "AI analysis service returned an invalid response.",
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("logs token usage without adding it to the analysis", async () => {
+    const info = vi.spyOn(logger, "info");
+    fetchMock.mockResolvedValue(
+      successfulResponse({
+        usage: { prompt_tokens: 900, completion_tokens: 300, total_tokens: 1200 },
+      }),
+    );
+
+    const result = await generateStockAnalysis({ stock, metrics });
+
+    expect(result).not.toHaveProperty("usage");
+    expect(info).toHaveBeenCalledWith(
+      {
+        model: "test-model",
+        attempt: 1,
+        durationMs: expect.any(Number),
+        promptTokens: 900,
+        completionTokens: 300,
+        totalTokens: 1200,
+      },
+      "Groq analysis generated",
+    );
+  });
+
+  test("logs a failed attempt with the tokens it used", async () => {
+    const warn = vi.spyOn(logger, "warn");
+    const info = vi.spyOn(logger, "info");
+    fetchMock
+      .mockResolvedValueOnce(
+        successfulResponse(
+          { usage: { prompt_tokens: 900, completion_tokens: 40, total_tokens: 940 } },
+          "Plain text analysis.",
+        ),
+      )
+      .mockResolvedValueOnce(successfulResponse());
+
+    await generateStockAnalysis({ stock, metrics });
+
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attempt: 1,
+        status: 502,
+        reason: expect.stringContaining("JSON"),
+        willRetry: true,
+        completionTokens: 40,
+      }),
+      "Groq analysis attempt failed",
+    );
+    expect(info).toHaveBeenCalledWith(
+      expect.objectContaining({ attempt: 2 }),
+      "Groq analysis generated",
+    );
   });
 
   test("does not retry provider errors", async () => {

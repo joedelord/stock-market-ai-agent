@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const { z } = require("zod");
 
 const HttpError = require("../utils/httpError");
+const logger = require("../utils/logger");
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -96,6 +97,12 @@ const readError = async (response) => {
     return {};
   }
 };
+
+const readUsage = (usage) => ({
+  promptTokens: usage?.prompt_tokens,
+  completionTokens: usage?.completion_tokens,
+  totalTokens: usage?.total_tokens,
+});
 
 // A 429 that no retry can fix: the request alone exceeds a per-minute limit.
 const isRequestTooLarge = (detail) =>
@@ -330,30 +337,69 @@ const requestStockAnalysis = async ({ stock, metrics, news }) => {
 
   const choice = data?.choices?.[0];
   const text = choice?.message?.content;
+  const usage = readUsage(data?.usage);
 
-  if (
-    choice?.finish_reason !== "stop" ||
-    typeof text !== "string" ||
-    text.trim() === ""
-  ) {
-    throw incompleteResponseError(
-      new Error(`Groq finish_reason: ${choice?.finish_reason}`),
-    );
+  try {
+    if (
+      choice?.finish_reason !== "stop" ||
+      typeof text !== "string" ||
+      text.trim() === ""
+    ) {
+      throw incompleteResponseError(
+        new Error(`Groq finish_reason: ${choice?.finish_reason}`),
+      );
+    }
+
+    return {
+      analysis: {
+        ...parseAnalysisContent(text, news),
+        model: typeof data.model === "string" ? data.model : model,
+        generatedAt: new Date().toISOString(),
+      },
+      usage,
+    };
+  } catch (error) {
+    // A rejected answer still used tokens from the per-minute limit.
+    error.usage = usage;
+    throw error;
   }
-
-  return {
-    ...parseAnalysisContent(text, news),
-    model: typeof data.model === "string" ? data.model : model,
-    generatedAt: new Date().toISOString(),
-  };
 };
 
+// One line per Groq call shows how often answers are retried and how close
+// requests run to the per-minute token limits. Usage is kept out of the
+// analysis, because the analysis is stored and sent to users.
 const generateStockAnalysis = async (input) => {
+  const model = process.env.GROQ_MODEL?.trim();
+
   for (let attempt = 1; ; attempt += 1) {
+    const startedAt = Date.now();
+
     try {
-      return await requestStockAnalysis(input);
+      const { analysis, usage } = await requestStockAnalysis(input);
+
+      logger.info(
+        { model, attempt, durationMs: Date.now() - startedAt, ...usage },
+        "Groq analysis generated",
+      );
+
+      return analysis;
     } catch (error) {
-      if (!error.retryable || attempt >= MAX_ATTEMPTS) throw error;
+      const willRetry = Boolean(error.retryable) && attempt < MAX_ATTEMPTS;
+
+      logger.warn(
+        {
+          model,
+          attempt,
+          durationMs: Date.now() - startedAt,
+          status: error.status,
+          reason: error.cause?.message ?? error.message,
+          willRetry,
+          ...error.usage,
+        },
+        "Groq analysis attempt failed",
+      );
+
+      if (!willRetry) throw error;
     }
   }
 };

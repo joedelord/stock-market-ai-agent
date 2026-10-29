@@ -1,4 +1,5 @@
 const stockAnalysisModel = require("../models/stockAnalysisModel");
+const logger = require("../utils/logger");
 const {
   generateStockAnalysis,
   getAnalysisCacheKey,
@@ -78,6 +79,13 @@ const getOrCreateStockAnalysis = async ({ stock, metrics, news }) => {
     );
 
     if (!latest) throw error;
+
+    // The request succeeds, so without this a busy Groq would not show in
+    // the logs at all.
+    logger.info(
+      { stockId: stock.id, analysisCreatedAt: latest.created_at },
+      "Groq busy, returned a stale analysis",
+    );
 
     return {
       analysis: latest.analysis,
