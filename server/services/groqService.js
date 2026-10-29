@@ -15,6 +15,13 @@ const TEMPERATURE = 0.2;
 const MAX_SECTION_LENGTH = 1500;
 const MAX_CITED_ARTICLES = 2;
 const CITATION_PATTERN = /\[(\d+)\]/g;
+// json_object mode only guarantees valid JSON, and the model now and then
+// leaves out a key or breaks off, then handles the same input fine on the
+// next try. Groq's strict schema mode was tried instead, but failed more
+// often with qwen/qwen3.8-27b. Two attempts can reserve 2 x 500 output
+// tokens, which still fits the free tier's 1000 a minute.
+const MAX_ATTEMPTS = 2;
+const JSON_VALIDATE_FAILED = "json_validate_failed";
 
 const TOO_MANY_REQUESTS = 429;
 const BAD_GATEWAY = 502;
@@ -38,8 +45,12 @@ Respond with a single JSON object and nothing else, with these keys:
 Every value except citedArticles is a non-empty string without Markdown.
 
 Distinguish the latest interval change from the full supplied period change.
-metrics.dayMovement is a separate stored quote compared with the previous
-trading session close. If present, describe its changePercent, priceTime and
+latestBarChangePercent compares the latest bar with previousBarClose, the
+bar before it; always call that the previous bar or interval, never the
+previous close.
+metrics.dayMovement is a separate stored quote compared with
+previousSessionClose, the previous trading session close; call that the
+previous session close. If present, describe its changePercent, priceTime and
 isSignificant flag (an absolute change of at least thresholdPercent).
 If thresholdMethod is volatility, the threshold is twice the typical daily
 move (volatilityPercent) estimated from volatilityReturnCount approximate
@@ -59,21 +70,30 @@ newsContext, citing each by its number field as [1], [2] or [3], and list
 the same numbers in citedArticles. Never cite a number that is not supplied. Explain only possible connections;
 publication before the quote does not prove it preceded or caused the move.
 Summaries are excerpts, not full articles. Do not invent facts or causes.
-Otherwise say in newsContext that news was not requested, not configured,
-unsupported, unavailable or not found, according to news.status, and leave
-citedArticles empty. No results does not prove no news exists.
+Otherwise leave citedArticles empty and say in newsContext, in your own
+words, why there is no news, based on news.status:
+not_requested: news was not checked, because the day movement is
+unavailable (if dayMovement is null) or not significant;
+not_configured: company news is not configured;
+unsupported: news coverage for this listing could not be verified;
+unavailable: the news provider was unavailable;
+no_results: no matching articles were found, which does not prove that no
+news exists.
 Do not make predictions, price targets or buy/sell recommendations.
 Keep all text values together under 250 words.
 `.trim();
 
-const readErrorMessage = async (response) => {
+const readError = async (response) => {
   try {
     const body = await response.json();
-    const message = body?.error?.message;
+    const { message, code } = body?.error ?? {};
 
-    return typeof message === "string" ? message : undefined;
+    return {
+      message: typeof message === "string" ? message : undefined,
+      code: typeof code === "string" ? code : undefined,
+    };
   } catch {
-    return undefined;
+    return {};
   }
 };
 
@@ -99,10 +119,17 @@ const analysisContentSchema = z.object({
   citedArticles: z.array(z.number().int()).max(MAX_CITED_ARTICLES),
 });
 
-const invalidResponseError = (cause) =>
-  new HttpError(BAD_GATEWAY, "AI analysis service returned an invalid response.", {
-    cause,
-  });
+// Unusable model output is worth one more try; see MAX_ATTEMPTS.
+const invalidResponseError = (cause) => {
+  const error = new HttpError(
+    BAD_GATEWAY,
+    "AI analysis service returned an invalid response.",
+    { cause },
+  );
+  error.retryable = true;
+
+  return error;
+};
 
 // The model must only cite articles it was given; a citation to a missing
 // article would look like a sourced claim that has no source.
@@ -142,6 +169,29 @@ const incompleteResponseError = (cause) =>
     { cause },
   );
 
+// The bar metrics and the day movement both have a previousClose, and the
+// model called both "the previous close", so a +0.48% bar change and a -3.5%
+// session change read as a contradiction. The model gets names that say
+// which close each one is; the API keeps the original names.
+const toModelDayMovement = ({ previousClose, ...dayMovement }) => ({
+  ...dayMovement,
+  previousSessionClose: previousClose,
+});
+
+const toModelMetrics = ({
+  previousClose,
+  latestChangePercent,
+  dayMovement,
+  ...metrics
+}) => ({
+  ...metrics,
+  previousBarClose: previousClose,
+  latestBarChangePercent: latestChangePercent,
+  ...(dayMovement !== undefined && {
+    dayMovement: dayMovement && toModelDayMovement(dayMovement),
+  }),
+});
+
 const buildUserContent = ({ stock, metrics, news }) =>
   JSON.stringify({
     stock: {
@@ -150,7 +200,7 @@ const buildUserContent = ({ stock, metrics, news }) =>
       name: stock.name,
       currency: stock.currency,
     },
-    metrics,
+    metrics: toModelMetrics(metrics),
     news,
   });
 
@@ -173,7 +223,7 @@ const getAnalysisCacheKey = (input) =>
     )
     .digest("hex");
 
-const generateStockAnalysis = async ({ stock, metrics, news }) => {
+const requestStockAnalysis = async ({ stock, metrics, news }) => {
   const apiKey = process.env.GROQ_API_KEY?.trim();
   const model = process.env.GROQ_MODEL?.trim();
   // Optional, because the allowed values differ between models.
@@ -229,10 +279,15 @@ const generateStockAnalysis = async ({ stock, metrics, news }) => {
   if (!response.ok) {
     // Groq's own message (e.g. "model does not exist") goes to the logs only;
     // users see the generic message below.
-    const detail = await readErrorMessage(response);
+    const { message: detail, code } = await readError(response);
     const cause = new Error(
       `Groq responded with HTTP ${response.status}${detail ? `: ${detail}` : ""}`,
     );
+
+    // Groq rejects output that is not valid JSON itself, as a 400.
+    if (code === JSON_VALIDATE_FAILED) {
+      throw invalidResponseError(cause);
+    }
 
     if (response.status === TOO_MANY_REQUESTS && isRequestTooLarge(detail)) {
       throw new HttpError(
@@ -291,6 +346,16 @@ const generateStockAnalysis = async ({ stock, metrics, news }) => {
     model: typeof data.model === "string" ? data.model : model,
     generatedAt: new Date().toISOString(),
   };
+};
+
+const generateStockAnalysis = async (input) => {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await requestStockAnalysis(input);
+    } catch (error) {
+      if (!error.retryable || attempt >= MAX_ATTEMPTS) throw error;
+    }
+  }
 };
 
 module.exports = {

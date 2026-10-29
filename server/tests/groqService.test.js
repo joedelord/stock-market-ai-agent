@@ -117,6 +117,8 @@ describe("Groq Service", () => {
     expect(body.messages[0].role).toBe("system");
     expect(body.messages[1].role).toBe("user");
 
+    const { previousClose, latestChangePercent, ...otherMetrics } = metrics;
+
     expect(JSON.parse(body.messages[1].content)).toEqual({
       stock: {
         symbol: "AAPL",
@@ -124,7 +126,11 @@ describe("Groq Service", () => {
         name: "Apple",
         currency: "USD",
       },
-      metrics,
+      metrics: {
+        ...otherMetrics,
+        previousBarClose: previousClose,
+        latestBarChangePercent: latestChangePercent,
+      },
     });
 
     expect(body.response_format).toEqual({ type: "json_object" });
@@ -202,6 +208,79 @@ describe("Groq Service", () => {
       status: 502,
       message: "AI analysis service returned an invalid response.",
     });
+  });
+
+  test("names the session close in the day movement it sends", async () => {
+    fetchMock.mockResolvedValue(successfulResponse());
+    const dayMovement = { priceTime: "2026-10-19T13:45:00.000Z", close: 97, previousClose: 100 };
+
+    await generateStockAnalysis({ stock, metrics: { ...metrics, dayMovement } });
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+
+    expect(JSON.parse(body.messages[1].content).metrics.dayMovement).toEqual({
+      priceTime: "2026-10-19T13:45:00.000Z",
+      close: 97,
+      previousSessionClose: 100,
+    });
+  });
+
+  test("sends a null day movement unchanged", async () => {
+    fetchMock.mockResolvedValue(successfulResponse());
+
+    await generateStockAnalysis({ stock, metrics: { ...metrics, dayMovement: null } });
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+
+    expect(JSON.parse(body.messages[1].content).metrics.dayMovement).toBeNull();
+  });
+
+  test("retries once when the answer is missing a section", async () => {
+    const { limitations, ...incomplete } = JSON.parse(analysisContent());
+    fetchMock
+      .mockResolvedValueOnce(successfulResponse({}, JSON.stringify(incomplete)))
+      .mockResolvedValueOnce(successfulResponse());
+
+    const result = await generateStockAnalysis({ stock, metrics });
+
+    expect(result.sections.limitations).toBe(limitations);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("retries once when Groq rejects the generated JSON", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        failedResponse(400, {
+          errorBody: {
+            error: { message: "Failed to generate JSON.", code: "json_validate_failed" },
+          },
+        }),
+      )
+      .mockResolvedValueOnce(successfulResponse());
+
+    await expect(generateStockAnalysis({ stock, metrics })).resolves.toMatchObject({
+      model: "test-model",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("gives up after two invalid answers", async () => {
+    fetchMock.mockResolvedValue(successfulResponse({}, "Plain text analysis."));
+
+    await expect(generateStockAnalysis({ stock, metrics })).rejects.toMatchObject({
+      status: 502,
+      message: "AI analysis service returned an invalid response.",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("does not retry provider errors", async () => {
+    fetchMock.mockResolvedValue(failedResponse(500));
+
+    await expect(generateStockAnalysis({ stock, metrics })).rejects.toMatchObject({
+      status: 502,
+    });
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   test("cache key changes only when the Groq request would change", () => {

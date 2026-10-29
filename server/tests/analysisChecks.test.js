@@ -48,6 +48,24 @@ describe("Analysis checks", () => {
     expect(checkAnalysis(analysis({ priceMovement: "Apple is down 3% today." }))).toEqual([
       expect.stringContaining("Describes data as live"),
     ]);
+
+    expect(
+      checkAnalysis(analysis({ movingAverages: "The price is currently trading above SMA20." })),
+    ).toEqual(['Describes data as live in movingAverages: "currently trading"']);
+  });
+
+  test("flags internal names copied from the prompt", () => {
+    const text = "News was not found, according to news.status, and leave citedArticles empty.";
+
+    expect(checkAnalysis(analysis({ newsContext: text }))).toEqual([
+      'Internal name in newsContext: "news.status"',
+    ]);
+  });
+
+  test("allows the limitations to say the data is not live", () => {
+    expect(
+      checkAnalysis(analysis({ limitations: "This is not real-time data." })),
+    ).toEqual([]);
   });
 
   test("flags overly long answers", () => {

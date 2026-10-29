@@ -166,8 +166,9 @@ describe("Stock analysis", () => {
     expect(response.body.metrics.latestChangePercent).toBeGreaterThan(0);
     expect(response.body.news.status).toBe("not_configured");
     const payload = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const { previousClose, ...dayMovement } = response.body.metrics.dayMovement;
     expect(JSON.parse(payload.messages[1].content).metrics.dayMovement)
-      .toEqual(response.body.metrics.dayMovement);
+      .toEqual({ ...dayMovement, previousSessionClose: previousClose });
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 

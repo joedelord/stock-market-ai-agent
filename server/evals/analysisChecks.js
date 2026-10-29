@@ -27,6 +27,11 @@ const LIVE_PATTERN = /\b(today|currently trading|right now|real-time|live price)
 // (SMA20), a date (2026-10-17), a time (19:45) or a citation ([1]).
 const NUMBER_PATTERN = /(?<![\w.:,[])(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?(?![\w:\-\]])(\s?%|\s?percent)?/gi;
 
+// Field names and status codes from the input or prompt. Seeing one in the
+// text usually means the model copied a prompt line instead of answering.
+const INTERNAL_NAME_PATTERN =
+  /\b(news\.status|citedArticles|dayMovement|changePercent|isSignificant|thresholdMethod|previous(Bar|Session)Close|latestBarChangePercent|not_requested|not_configured|no_results)\b/;
+
 const countWords = (text) => text.split(/\s+/).filter(Boolean).length;
 
 const readNumbers = (text) =>
@@ -87,6 +92,11 @@ const checkAnalysis = (analysis, expectations = {}, input = null) => {
     });
   }
 
+  Object.entries(sections).forEach(([key, section]) => {
+    const name = section.match(INTERNAL_NAME_PATTERN);
+    if (name) failures.push(`Internal name in ${key}: "${name[0]}"`);
+  });
+
   ADVICE_PATTERNS.forEach((pattern) => {
     const match = text.match(pattern);
     if (match) failures.push(`Advice or forecast: "${match[0]}"`);
@@ -99,7 +109,10 @@ const checkAnalysis = (analysis, expectations = {}, input = null) => {
         failures.push(`Unhedged cause in ${key}: "${sentence.trim()}"`);
       }
     });
+  });
 
+  // Not the limitations, where "this is not real-time data" is correct.
+  ["priceMovement", "movingAverages", "newsContext"].forEach((key) => {
     const live = sections[key].match(LIVE_PATTERN);
     if (live) failures.push(`Describes data as live in ${key}: "${live[0]}"`);
   });

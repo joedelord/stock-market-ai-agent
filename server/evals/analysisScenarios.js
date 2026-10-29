@@ -69,6 +69,8 @@ const SCENARIOS = [
     input: { stock: APPLE, metrics: metrics(), news: notRequested },
     expect: {
       mustMatch: { priceMovement: [/unavailable|not available/i] },
+      // Without a quote there is no day movement to call insignificant.
+      mustNotMatch: [/no significant (day )?movement/i],
     },
   },
   {
@@ -84,8 +86,16 @@ const SCENARIOS = [
     description: "Quote down 3.5% while the bars rose; the bar change is not a daily change",
     input: { stock: APPLE, metrics: metrics({ dayMovement: dayMovement(-3.5) }), news: news("not_configured") },
     expect: {
-      mustMatch: { priceMovement: [/3\.5/], newsContext: [/not configured/i] },
-      mustNotMatch: [/\b(daily|today's) (gain|rise|increase) of 4/i],
+      mustMatch: {
+        priceMovement: [/3\.5/, /previous (trading )?session/i],
+        newsContext: [/not configured/i],
+      },
+      // The bar change was once described as "up 0.48% from the previous
+      // close", which reads like a contradiction of the session drop.
+      mustNotMatch: [
+        /\b(daily|today's) (gain|rise|increase) of 4/i,
+        /0\.48\s?(%|percent) from (the|a) previous close\b/i,
+      ],
     },
   },
   {
@@ -126,7 +136,7 @@ const SCENARIOS = [
     description: "No articles found; absence of results is not absence of news",
     input: { stock: APPLE, metrics: metrics({ dayMovement: dayMovement(5) }), news: news("no_results") },
     expect: {
-      mustMatch: { newsContext: [/not found|no (matching )?articles|none (were|was) (found|returned)|no results/i] },
+      mustMatch: { newsContext: [/not found|no (matching )?(news )?articles|none (were|was) (found|returned)|no results/i] },
       mustNotMatch: [/there (is|was) no news|no news (exists|was published)/i],
     },
   },
