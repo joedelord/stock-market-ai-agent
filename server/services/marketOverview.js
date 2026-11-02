@@ -1,10 +1,9 @@
 const {
-  SUPPORTED_EXCHANGES,
+  getEnabledExchanges,
   getExchangeTimeZone,
 } = require("../config/exchangeMapping");
 
 const MARKET_EXCHANGES = {
-  all: SUPPORTED_EXCHANGES,
   us: ["XNAS", "XNYS"],
   helsinki: ["XHEL"],
 };
@@ -35,7 +34,23 @@ const tieBreak = (a, b) =>
   a.exchange.localeCompare(b.exchange) ||
   Number(a.id) - Number(b.id);
 
-const getMarketExchanges = (market) => MARKET_EXCHANGES[market];
+// "all" means every enabled exchange. A market whose exchanges are all
+// disabled gets an empty list, so its overview is empty.
+const getMarketExchanges = (market) => {
+  const enabled = getEnabledExchanges();
+
+  if (market === "all") return enabled;
+
+  return MARKET_EXCHANGES[market].filter((exchange) =>
+    enabled.includes(exchange),
+  );
+};
+
+// The markets the client can choose between.
+const getMarkets = () =>
+  Object.keys(MARKET_EXCHANGES).filter(
+    (market) => getMarketExchanges(market).length > 0,
+  );
 
 // A quote from an older trading day cannot enter the ranking for its
 // exchange. On weekends the latest stored trading day remains available;
@@ -83,11 +98,14 @@ const buildOverview = (stocks, market = "all") => {
       )
       .slice(0, LIST_SIZE),
 
+    markets: getMarkets(),
+
     generatedAt: new Date().toISOString(),
   };
 };
 
 module.exports = {
   getMarketExchanges,
+  getMarkets,
   buildOverview,
 };

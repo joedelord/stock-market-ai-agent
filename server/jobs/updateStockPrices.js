@@ -3,6 +3,7 @@ const { setTimeout: wait } = require("timers/promises");
 const stockModel = require("../models/stockModel");
 const marketDataService = require("../services/marketDataService");
 const alertService = require("../services/alertService");
+const { isExchangeEnabled } = require("../config/exchangeMapping");
 
 const INTERVAL = "15min";
 const OUTPUT_SIZE = 5;
@@ -15,7 +16,8 @@ const isQuoteFresh = (quote) =>
   Boolean(quote) &&
   Date.now() - new Date(quote.fetched_at).getTime() < QUOTE_MAX_AGE_MS;
 
-// exchanges is optional: manual updates process tracked active stocks on every exchange.
+// exchanges is optional: manual updates process tracked active stocks on
+// every enabled exchange. Disabled exchanges are skipped either way.
 
 const updateStockPrices = async ({
   delayMs = REQUEST_DELAY_MS,
@@ -28,7 +30,9 @@ const updateStockPrices = async ({
 
   const activeStocks = stocks.filter(
     (stock) =>
-      stock.is_active && (!exchanges || exchanges.includes(stock.exchange)),
+      stock.is_active &&
+      isExchangeEnabled(stock.exchange) &&
+      (!exchanges || exchanges.includes(stock.exchange)),
   );
 
   const results = [];

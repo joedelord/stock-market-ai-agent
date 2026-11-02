@@ -5,6 +5,7 @@ const pool = require("../config/db");
 const stockModel = require("../models/stockModel");
 const { createUserAccount } = require("../services/userService");
 const { clearDatabase } = require("./helpers/database");
+const { useUsExchangesOnly } = require("./helpers/exchanges");
 
 const STOCK_DATA = {
   symbol: "AAPL",
@@ -579,5 +580,39 @@ describe("saveStockQuote", () => {
     const quote = await stockModel.getStockQuote(created.body.stock.id);
 
     expect(quote).toBeUndefined();
+  });
+});
+
+describe("Creating stocks with only US exchanges enabled", () => {
+  useUsExchangesOnly();
+
+  test("rejects a disabled exchange and names the enabled ones", async () => {
+    const response = await createStock({
+      symbol: "NOKIA",
+      exchange: "xhel",
+      name: "Nokia Oyj",
+      currency: "EUR",
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      error: "Validation failed",
+      details: [
+        {
+          field: "body.exchange",
+          message: "Exchange must be one of: XNAS, XNYS",
+        },
+      ],
+    });
+
+    const result = await pool.query("SELECT id FROM stocks");
+
+    expect(result.rows).toHaveLength(0);
+  });
+
+  test("still creates stocks on enabled exchanges", async () => {
+    const response = await createStock({ exchange: "XNYS" });
+
+    expect(response.status).toBe(201);
   });
 });

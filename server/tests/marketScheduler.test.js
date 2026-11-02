@@ -5,6 +5,7 @@ const {
   createMarketScheduler,
 } = require("../jobs/marketScheduler");
 const { MARKET_CALENDAR } = require("../config/marketCalendar");
+const { useUsExchangesOnly } = require("./helpers/exchanges");
 
 const [NEW_YORK, HELSINKI] = MARKET_HOURS;
 
@@ -63,7 +64,9 @@ describe("isMarketOpen and getOpenExchanges", () => {
   test("missing calendar falls back to normal hours per exchange", () => {
     // XTST has no calendar, so Thanksgiving only closes XNYS.
     const mixedMarket = { ...NEW_YORK, exchanges: ["XNYS", "XTST"] };
-    expect(getOpenExchanges(new Date("2026-11-26T15:00:00Z"), [mixedMarket])).toEqual(["XTST"]);
+    expect(
+      getOpenExchanges(new Date("2026-11-26T15:00:00Z"), [mixedMarket], ["XNYS", "XTST"]),
+    ).toEqual(["XTST"]);
   });
 
   test("calendar covers the current and next year for every exchange", () => {
@@ -106,6 +109,21 @@ describe("isMarketOpen and getOpenExchanges", () => {
   test("returns no exchanges when all markets are closed", () => {
     expect(getOpenExchanges(new Date("2026-10-14T21:00:00Z"))).toEqual([]);
     expect(isMarketOpen(new Date("2026-10-14T21:00:00Z"))).toBe(false);
+  });
+});
+
+describe("getOpenExchanges with only US exchanges enabled", () => {
+  useUsExchangesOnly();
+
+  test("leaves out Helsinki while both markets are open", () => {
+    expect(getOpenExchanges(new Date("2026-10-14T14:00:00Z"))).toEqual([
+      "XNAS", "XNYS",
+    ]);
+  });
+
+  test("returns nothing during Helsinki-only hours", () => {
+    expect(getOpenExchanges(new Date("2026-10-14T08:00:00Z"))).toEqual([]);
+    expect(isMarketOpen(new Date("2026-10-14T08:00:00Z"))).toBe(false);
   });
 });
 

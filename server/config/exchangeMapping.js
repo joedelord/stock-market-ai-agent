@@ -28,6 +28,44 @@ const getMicCode = (providerExchange) => MIC_CODES[providerExchange];
 const getExchangeTimeZone = (exchange) =>
   EXCHANGE_TIME_ZONES[exchange] ?? DEFAULT_TIME_ZONE;
 
+// Twelve Data Basic does not cover Helsinki, so by default only the US
+// exchanges are fetched, searched and shown.
+const DEFAULT_ENABLED_EXCHANGES = "XNAS,XNYS";
+
+// Read on every call, so tests can switch exchanges without reloading modules.
+const getEnabledExchanges = () => {
+  const value =
+    process.env.ENABLED_EXCHANGES?.trim() || DEFAULT_ENABLED_EXCHANGES;
+
+  const exchanges = [
+    ...new Set(
+      value
+        .split(",")
+        .map((exchange) => exchange.trim().toUpperCase())
+        .filter(Boolean),
+    ),
+  ];
+
+  const unknown = exchanges.filter(
+    (exchange) => !SUPPORTED_EXCHANGES.includes(exchange),
+  );
+
+  if (unknown.length > 0) {
+    throw new Error(
+      `Unknown exchange in ENABLED_EXCHANGES: ${unknown.join(", ")}. Supported exchanges: ${SUPPORTED_EXCHANGES.join(", ")}`,
+    );
+  }
+
+  if (exchanges.length === 0) {
+    throw new Error("ENABLED_EXCHANGES must list at least one exchange");
+  }
+
+  return exchanges;
+};
+
+const isExchangeEnabled = (exchange) =>
+  getEnabledExchanges().includes(exchange);
+
 const getProviderExchange = (exchange) => {
   const providerExchange = PROVIDER_EXCHANGES[exchange];
 
@@ -40,7 +78,9 @@ const getProviderExchange = (exchange) => {
 
 module.exports = {
   SUPPORTED_EXCHANGES,
+  getEnabledExchanges,
   getExchangeTimeZone,
   getMicCode,
   getProviderExchange,
+  isExchangeEnabled,
 };

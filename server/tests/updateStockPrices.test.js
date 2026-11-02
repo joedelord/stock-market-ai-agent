@@ -3,6 +3,7 @@ const marketDataService = require("../services/marketDataService");
 const alertService = require("../services/alertService");
 
 const { updateStockPrices } = require("../jobs/updateStockPrices");
+const { useUsExchangesOnly } = require("./helpers/exchanges");
 
 const stocks = [
   {
@@ -443,5 +444,47 @@ describe("Update Stock Prices Job", () => {
       saved: 1,
       alertError: "Alert check failed",
     });
+  });
+});
+
+describe("Update Stock Prices Job with only US exchanges enabled", () => {
+  useUsExchangesOnly();
+
+  beforeEach(() => {
+    vi.spyOn(stockModel, "getTrackedStocks").mockResolvedValue(stocks);
+    vi.spyOn(marketDataService, "fetchStockPrices").mockResolvedValue(
+      sampleData,
+    );
+    vi.spyOn(stockModel, "saveStockPrices").mockResolvedValue(1);
+    vi.spyOn(marketDataService, "fetchStockQuote").mockResolvedValue(
+      sampleQuote,
+    );
+    vi.spyOn(stockModel, "getStockQuote").mockResolvedValue(undefined);
+    vi.spyOn(stockModel, "saveStockQuote").mockResolvedValue({
+      stock_id: 1,
+    });
+    vi.spyOn(alertService, "checkStockAlerts").mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  test("manual run skips stocks on disabled exchanges", async () => {
+    const results = await updateStockPrices({ delayMs: 0 });
+
+    expect(results.map((result) => result.symbol)).toEqual(["AAPL"]);
+    expect(marketDataService.fetchStockPrices).toHaveBeenCalledTimes(1);
+    expect(alertService.checkStockAlerts).toHaveBeenCalledTimes(1);
+  });
+
+  test("ignores a disabled exchange even when it is requested", async () => {
+    const results = await updateStockPrices({
+      delayMs: 0,
+      exchanges: ["XHEL"],
+    });
+
+    expect(results).toEqual([]);
+    expect(marketDataService.fetchStockPrices).not.toHaveBeenCalled();
   });
 });

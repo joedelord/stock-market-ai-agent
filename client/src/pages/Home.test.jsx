@@ -38,6 +38,22 @@ test("reloads the selected market and offers signed-in users their workspace", a
   expect(screen.queryByRole("link", { name: /Create your watchlist/ })).not.toBeInTheDocument();
 });
 
+test("offers only the markets the server lists", async () => {
+  mockApi({ "GET /stocks/overview": () => [200, { ...overview, markets: ["us", "helsinki"] }] });
+  renderHome();
+  await screen.findByRole("region", { name: "Top gainers" });
+  const options = within(screen.getByRole("combobox", { name: "Market" })).getAllByRole("option");
+  expect(options.map((option) => option.textContent)).toEqual(["All markets", "USA", "Helsinki"]);
+});
+
+test("hides the market selector when only one market is enabled", async () => {
+  mockApi({ "GET /stocks/overview": () => [200, { ...overview, markets: ["us"] }] });
+  renderHome();
+  await screen.findByRole("region", { name: "Top gainers" });
+  expect(screen.queryByRole("combobox", { name: "Market" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Refresh" })).toBeInTheDocument();
+});
+
 test("uses the app navbar with notifications and the account menu when logged in", async () => {
   mockApi({ "GET /stocks/overview": () => [200, overview] });
   renderHome(true);

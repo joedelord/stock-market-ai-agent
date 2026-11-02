@@ -6,6 +6,10 @@ ask an AI model ([Groq](https://groq.com)) to explain recent price movement,
 and get notified when price alerts trigger. Market data comes from
 [Twelve Data](https://twelvedata.com).
 
+The app focuses on the US stock market (Nasdaq and NYSE), because Twelve
+Data's Basic plan does not cover Nasdaq Helsinki. The Helsinki support is
+still in the code and can be turned back on with `ENABLED_EXCHANGES`.
+
 The project started from a React + Node + PostgreSQL authentication
 template, so it also includes user accounts, roles, and admin tools.
 
@@ -121,6 +125,7 @@ COOKIE_EXPIRES_IN_MS=3600000
 CLIENT_ORIGIN=http://localhost:5173
 
 TWELVE_DATA_API_KEY=your_twelve_data_api_key
+ENABLED_EXCHANGES=XNAS,XNYS
 
 GROQ_API_KEY=your_groq_api_key
 GROQ_MODEL=qwen/qwen3.8-27b
@@ -138,12 +143,15 @@ Other options:
 - `GROQ_REASONING_EFFORT` is optional. `none` turns off reasoning so the
   answer fits the 500-token limit. Allowed values depend on the model, so
   leave it unset if unsure.
+- `ENABLED_EXCHANGES` lists the MIC codes of the exchanges the app uses,
+  separated by commas (default `XNAS,XNYS`). See
+  [Enabled exchanges](#enabled-exchanges).
 - `MARKETAUX_API_KEY` is optional. It enables company news in the AI
   analysis for significant day moves; without it the analysis says news
   is not configured.
 
 The server refuses to start if `JWT_SECRET` or the database settings are
-missing. `TWELVE_DATA_API_KEY` is only needed to fetch market data.
+missing, or if `ENABLED_EXCHANGES` contains an unknown code. `TWELVE_DATA_API_KEY` is only needed to fetch market data.
 Without `GROQ_API_KEY` and `GROQ_MODEL` everything else works, and the
 analysis endpoint returns `503`.
 
@@ -296,8 +304,9 @@ charting, and the latest quote (`null` if there is none yet):
 ```
 
 `GET /api/stocks/overview` takes `market` (`all`, `us` or `helsinki`,
-default `all`) and returns `{ gainers, losers, mostFollowed, generatedAt }`,
-up to five stocks each:
+default `all`) and returns
+`{ gainers, losers, mostFollowed, markets, generatedAt }`, up to five
+stocks per list:
 
 - **Gainers and losers** rank the stored quotes' day change. Only quotes
   from each exchange's latest stored trading day count, so a stale quote
@@ -305,8 +314,12 @@ up to five stocks each:
 - **Most followed** lists stocks on at least two users' watchlists. The
   endpoint is public, and a count of one would show what a single user
   follows.
-- Only supported exchanges (`XHEL`, `XNAS`, `XNYS`) are included, so mock
-  stocks never appear.
+- Only enabled exchanges are included, so mock stocks and stocks on
+  disabled exchanges never appear. `all` means every enabled exchange, and
+  a market without enabled exchanges returns empty lists.
+- `markets` lists the markets that have enabled exchanges (`["us"]` by
+  default). The home page builds its market selector from it and hides
+  the selector when there is only one market.
 
 `POST /api/stocks` body:
 
@@ -322,7 +335,9 @@ up to five stocks each:
 `symbol`, `exchange` and `currency` are converted to upper case. The
 response is `201` with the new stock, or `409` if the symbol already
 exists on that exchange. Only admins can add stocks, because the catalog is
-shared by every user: guests get `401` and other roles get `403`.
+shared by every user: guests get `401` and other roles get `403`. An
+exchange that is not enabled is rejected with `400`, and the message lists
+the enabled exchanges.
 
 ### Adding stocks from Twelve Data
 
@@ -346,7 +361,7 @@ Data's `/symbol_search` and returns `{ results }`:
 }
 ```
 
-- Only common stocks on supported exchanges are returned, with the
+- Only common stocks on enabled exchanges are returned, with the
   exchange as our MIC code. Twelve Data's own `mic_code` is not used,
   because Nasdaq stocks come back as `XNGS`, `XNMS` or `XNCM`.
 - `stockId` is the stock's ID if it is already in the database, otherwise
@@ -522,6 +537,23 @@ local time zones. Supported exchanges:
 | `XNAS` | `NASDAQ`    | Nasdaq (US)     |
 | `XNYS` | `NYSE`      | New York (NYSE) |
 
+### Enabled exchanges
+
+`ENABLED_EXCHANGES` (default `XNAS,XNYS`) chooses which supported
+exchanges are in use. Twelve Data's Basic plan does not cover Helsinki, so
+`XHEL` is off by default. A disabled exchange is not updated by the
+scheduler or `market:once`, does not appear in search results or the
+market overview, and new stocks cannot be added to it. Stocks already in
+the database stay there. To turn Helsinki back on with a plan that covers
+it:
+
+```env
+ENABLED_EXCHANGES=XNAS,XNYS,XHEL
+```
+
+An unknown code, or a list without codes, stops the server and scripts at
+startup with an error that names the supported codes.
+
 Add a line to `PROVIDER_EXCHANGES` and `EXCHANGE_TIME_ZONES` to support
 another exchange, to `MARKET_HOURS` in
 [server/jobs/marketScheduler.js](server/jobs/marketScheduler.js) for the
@@ -535,7 +567,8 @@ Try the integration from `server/`:
 # Search for a symbol
 node scripts/searchStocks.js NOKIA
 
-# Fetch the latest 15-minute bars for AAPL and NOKIA
+# Fetch the latest 15-minute bars for AAPL, IBM and NOKIA (enabled
+# exchanges only)
 node scripts/testMarketData.js
 
 # Update every tracked stock once
@@ -561,7 +594,8 @@ result per stock and exits with code 1 if any price fetch failed.
 schedule in [server/jobs/marketScheduler.js](server/jobs/marketScheduler.js))
 updates once at startup, then every 15 minutes on weekdays while New York
 (09:30-16:00 local time) or Helsinki (10:00-18:30 local time) is open. Each
-run only updates stocks on the exchanges that are open at that time. One
+run only updates stocks on the enabled exchanges that are open at that
+time, so with the default configuration Helsinki hours are skipped. One
 more run 15 minutes after each close saves the last bar of the day.
 
 Holidays and early closes come from
@@ -683,6 +717,10 @@ JWT_SECRET=test-secret-key-only-for-tests
 JWT_EXPIRES_IN=1h
 COOKIE_EXPIRES_IN_MS=3600000
 ```
+
+`server/tests/setup.js` sets `ENABLED_EXCHANGES=XNAS,XNYS,XHEL`, so the
+Helsinki tests keep running. Tests for the default US-only configuration
+use `useUsExchangesOnly()` from `server/tests/helpers/exchanges.js`.
 
 Create the database and run the migrations against it (PowerShell):
 
