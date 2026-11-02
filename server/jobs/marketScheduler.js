@@ -3,6 +3,7 @@ const cron = require("node-cron");
 const logger = require("../utils/logger");
 const { updateStockPrices } = require("./updateStockPrices");
 const { MARKET_CALENDAR } = require("../config/marketCalendar");
+const { getEnabledExchanges } = require("../config/exchangeMapping");
 
 // Every 15 minutes on weekdays (UTC); market-specific local hours are below.
 const CRON_EXPRESSION = "*/15 * * * 1-5";
@@ -82,13 +83,22 @@ const isOpenAt = ({ timeZone, open, close }, exchange, date) => {
     && currentMinutes <= toMinutes(actualClose) + FINAL_CANDLE_BUFFER;
 };
 
-const getOpenExchanges = (date = new Date(), markets = MARKET_HOURS) =>
+// Disabled exchanges are never fetched, even while their market is open.
+const getOpenExchanges = (
+  date = new Date(),
+  markets = MARKET_HOURS,
+  enabledExchanges = getEnabledExchanges(),
+) =>
   [...new Set(markets.flatMap((market) =>
-    (market.exchanges || []).filter((exchange) => isOpenAt(market, exchange, date)),
+    (market.exchanges || []).filter((exchange) =>
+      enabledExchanges.includes(exchange) && isOpenAt(market, exchange, date)),
   ))];
 
-const isMarketOpen = (date = new Date(), markets = MARKET_HOURS) =>
-  getOpenExchanges(date, markets).length > 0;
+const isMarketOpen = (
+  date = new Date(),
+  markets = MARKET_HOURS,
+  enabledExchanges = getEnabledExchanges(),
+) => getOpenExchanges(date, markets, enabledExchanges).length > 0;
 
 const createMarketScheduler = ({
   updatePrices = updateStockPrices,

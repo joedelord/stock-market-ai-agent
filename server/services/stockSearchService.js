@@ -1,6 +1,9 @@
 const stockModel = require("../models/stockModel");
 const marketDataService = require("./marketDataService");
-const { getMicCode } = require("../config/exchangeMapping");
+const {
+  getMicCode,
+  isExchangeEnabled,
+} = require("../config/exchangeMapping");
 const HttpError = require("../utils/httpError");
 
 const BAD_GATEWAY = 502;
@@ -31,7 +34,7 @@ const fetchProviderResults = async (query) => {
   }
 };
 
-// Returns the provider's stocks on supported exchanges in our format, marked
+// Returns the provider's stocks on enabled exchanges in our format, marked
 // with whether they are already in the database.
 const searchProviderStocks = async (query) => {
   if (!process.env.TWELVE_DATA_API_KEY?.trim()) {
@@ -44,7 +47,11 @@ const searchProviderStocks = async (query) => {
   for (const item of items) {
     const exchange = getMicCode(item.exchange);
 
-    if (item.instrument_type !== STOCK_INSTRUMENT_TYPE || !exchange) {
+    if (
+      item.instrument_type !== STOCK_INSTRUMENT_TYPE ||
+      !exchange ||
+      !isExchangeEnabled(exchange)
+    ) {
       continue;
     }
 

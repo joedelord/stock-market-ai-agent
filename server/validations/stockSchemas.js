@@ -1,6 +1,10 @@
 const { z } = require("zod");
 
 const { createIdField } = require("./commonFields");
+const {
+  getEnabledExchanges,
+  isExchangeEnabled,
+} = require("../config/exchangeMapping");
 
 const stockIdField = createIdField("Stock ID");
 
@@ -20,7 +24,12 @@ const createStockSchema = z.object({
         .trim()
         .length(4, "Exchange must be a 4-character MIC code")
         .regex(/^[A-Za-z0-9]+$/, "Invalid exchange")
-        .toUpperCase(),
+        .toUpperCase()
+        // A function, so the message follows the current configuration.
+        .refine(isExchangeEnabled, {
+          error: () =>
+            `Exchange must be one of: ${getEnabledExchanges().join(", ")}`,
+        }),
 
       name: z
         .string()

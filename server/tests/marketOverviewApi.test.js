@@ -5,6 +5,7 @@ const pool = require("../config/db");
 const stockModel = require("../models/stockModel");
 const watchlistModel = require("../models/watchlistModel");
 const { clearDatabase } = require("./helpers/database");
+const { useUsExchangesOnly } = require("./helpers/exchanges");
 
 beforeEach(async () => {
   await clearDatabase();
@@ -66,6 +67,7 @@ describe("Market overview API", () => {
       gainers: [],
       losers: [],
       mostFollowed: [],
+      markets: ["us", "helsinki"],
     });
   });
 
@@ -145,5 +147,48 @@ describe("Market overview API", () => {
 
     expect(response.status).toBe(400);
     expect(response.body.error).toBe("Validation failed");
+  });
+});
+
+describe("Market overview API with only US exchanges enabled", () => {
+  useUsExchangesOnly();
+
+  test("shows only US stocks and offers only the US market", async () => {
+    await createStock({ symbol: "AAPL", close: "110", previousClose: "100" });
+    await createStock({
+      symbol: "NOKIA",
+      exchange: "XHEL",
+      close: "5.5",
+      previousClose: "5",
+    });
+
+    const response = await request(app).get("/api/stocks/overview");
+
+    expect(response.status).toBe(200);
+    expect(response.body.markets).toEqual(["us"]);
+    expect(response.body.gainers.map((stock) => stock.symbol)).toEqual([
+      "AAPL",
+    ]);
+  });
+
+  test("returns empty lists for a disabled market", async () => {
+    await createStock({
+      symbol: "NOKIA",
+      exchange: "XHEL",
+      close: "5.5",
+      previousClose: "5",
+    });
+
+    const response = await request(app).get(
+      "/api/stocks/overview?market=helsinki",
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      gainers: [],
+      losers: [],
+      mostFollowed: [],
+      markets: ["us"],
+    });
   });
 });

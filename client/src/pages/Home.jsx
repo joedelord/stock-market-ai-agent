@@ -7,6 +7,15 @@ import { useAuth } from "../context/useAuth";
 import { getErrorMessage } from "../services/errors";
 import { getMarketOverview } from "../services/stockService";
 
+// Used until the server lists the markets that have enabled exchanges.
+const DEFAULT_MARKETS = ["us", "helsinki"];
+
+const MARKET_LABELS = {
+  all: "All markets",
+  us: "USA",
+  helsinki: "Helsinki",
+};
+
 function formatTime(value) {
   if (!value) return "No quote available";
 
@@ -136,7 +145,13 @@ function MarketHero({ isAuthenticated }) {
   );
 }
 
-function MarketToolbar({ market, onMarketChange, onRefresh, isLoading }) {
+function MarketToolbar({
+  market,
+  markets,
+  onMarketChange,
+  onRefresh,
+  isLoading,
+}) {
   return (
     <div className="market-toolbar">
       <div>
@@ -145,18 +160,25 @@ function MarketToolbar({ market, onMarketChange, onRefresh, isLoading }) {
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <label className="sr-only" htmlFor="market-filter">
-          Market
-        </label>
-        <select
-          id="market-filter"
-          value={market}
-          onChange={(event) => onMarketChange(event.target.value)}
-        >
-          <option value="all">All markets</option>
-          <option value="us">USA</option>
-          <option value="helsinki">Helsinki</option>
-        </select>
+        {/* With a single market, "All markets" would show the same lists. */}
+        {markets.length > 1 && (
+          <>
+            <label className="sr-only" htmlFor="market-filter">
+              Market
+            </label>
+            <select
+              id="market-filter"
+              value={market}
+              onChange={(event) => onMarketChange(event.target.value)}
+            >
+              {["all", ...markets].map((value) => (
+                <option key={value} value={value}>
+                  {MARKET_LABELS[value] ?? value}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
 
         <button
           type="button"
@@ -174,6 +196,8 @@ function MarketToolbar({ market, onMarketChange, onRefresh, isLoading }) {
 function Home() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [market, setMarket] = useState("all");
+  // Kept apart from data, which is cleared while another market loads.
+  const [markets, setMarkets] = useState(DEFAULT_MARKETS);
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -191,7 +215,10 @@ function Home() {
           signal: controller.signal,
         });
 
-        if (!controller.signal.aborted) setData(result);
+        if (!controller.signal.aborted) {
+          setData(result);
+          if (Array.isArray(result.markets)) setMarkets(result.markets);
+        }
       } catch (err) {
         if (!controller.signal.aborted) {
           setError(
@@ -236,6 +263,7 @@ function Home() {
         >
           <MarketToolbar
             market={market}
+            markets={markets}
             onMarketChange={handleMarketChange}
             onRefresh={() => setReload((value) => value + 1)}
             isLoading={loading}

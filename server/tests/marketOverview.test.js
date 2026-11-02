@@ -1,4 +1,8 @@
-const { buildOverview } = require("../services/marketOverview");
+const {
+  buildOverview,
+  getMarketExchanges,
+} = require("../services/marketOverview");
+const { useUsExchangesOnly } = require("./helpers/exchanges");
 
 const stock = (id, change, overrides = {}) => ({
   id, symbol: `S${id}`, name: `Stock ${id}`, exchange: "XNAS", currency: "USD",
@@ -39,4 +43,27 @@ test("hides stocks with a single follower and unsupported exchanges", () => {
 test("ignores absent, invalid and unchanged quotes in movers", () => {
   expect(buildOverview([stock(1, null), stock(2, "NaN"), stock(3, 0), stock(4, 10, { price_time: null })]).gainers).toEqual([]);
   expect(buildOverview([]).mostFollowed).toEqual([]);
+});
+
+test("lists the markets with enabled exchanges", () => {
+  expect(buildOverview([]).markets).toEqual(["us", "helsinki"]);
+  expect(getMarketExchanges("all")).toEqual(["XNAS", "XNYS", "XHEL"]);
+});
+
+describe("with only US exchanges enabled", () => {
+  useUsExchangesOnly();
+
+  test("offers only the US market", () => {
+    expect(buildOverview([]).markets).toEqual(["us"]);
+  });
+
+  test("all means the enabled exchanges and Helsinki is empty", () => {
+    expect(getMarketExchanges("all")).toEqual(["XNAS", "XNYS"]);
+    expect(getMarketExchanges("helsinki")).toEqual([]);
+
+    const rows = [stock(1, 2), stock(2, 5, { exchange: "XHEL" })];
+
+    expect(buildOverview(rows).gainers.map((s) => s.id)).toEqual([1]);
+    expect(buildOverview(rows, "helsinki").gainers).toEqual([]);
+  });
 });

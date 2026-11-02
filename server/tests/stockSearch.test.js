@@ -5,6 +5,7 @@ const pool = require("../config/db");
 const stockModel = require("../models/stockModel");
 const { createUserAccount } = require("../services/userService");
 const { clearDatabase } = require("./helpers/database");
+const { useUsExchangesOnly } = require("./helpers/exchanges");
 
 const originalApiKey = process.env.TWELVE_DATA_API_KEY;
 
@@ -240,6 +241,35 @@ describe("GET /api/stocks/search", () => {
     expect(response.status).toBe(504);
     expect(response.body).toEqual({
       error: "Stock search timed out. Please try again.",
+    });
+  });
+
+  describe("with only US exchanges enabled", () => {
+    useUsExchangesOnly();
+
+    test("leaves out stocks on disabled exchanges", async () => {
+      fetchMock.mockResolvedValue(
+        searchResponse([
+          searchItem(),
+          searchItem({
+            symbol: "NOKIA",
+            instrument_name: "Nokia Oyj",
+            exchange: "OMXH",
+            mic_code: "XHEL",
+            country: "Finland",
+            currency: "EUR",
+          }),
+        ]),
+      );
+
+      const response = await admin
+        .get("/api/stocks/search")
+        .query({ q: "a" });
+
+      expect(response.status).toBe(200);
+      expect(response.body.results.map((result) => result.symbol)).toEqual([
+        "AAPL",
+      ]);
     });
   });
 });
