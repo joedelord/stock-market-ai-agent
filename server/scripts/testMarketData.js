@@ -1,14 +1,21 @@
 require("../config/env");
 
 const { fetchStockPrices } = require("../services/marketDataService");
+const { isExchangeEnabled } = require("../config/exchangeMapping");
 
 const TEST_STOCKS = [
   { symbol: "AAPL", exchange: "XNAS" },
+  { symbol: "IBM", exchange: "XNYS" },
   { symbol: "NOKIA", exchange: "XHEL" },
 ];
 
 const testMarketData = async () => {
-  for (const { symbol, exchange } of TEST_STOCKS) {
+  // Disabled exchanges may not be covered by the Twelve Data plan.
+  const stocks = TEST_STOCKS.filter(({ exchange }) =>
+    isExchangeEnabled(exchange),
+  );
+
+  for (const { symbol, exchange } of stocks) {
     try {
       const result = await fetchStockPrices({
         symbol,

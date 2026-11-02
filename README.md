@@ -567,7 +567,8 @@ Try the integration from `server/`:
 # Search for a symbol
 node scripts/searchStocks.js NOKIA
 
-# Fetch the latest 15-minute bars for AAPL and NOKIA
+# Fetch the latest 15-minute bars for AAPL, IBM and NOKIA (enabled
+# exchanges only)
 node scripts/testMarketData.js
 
 # Update every tracked stock once

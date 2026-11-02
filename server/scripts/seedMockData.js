@@ -4,8 +4,8 @@ const pool = require("../config/db");
 const stockModel = require("../models/stockModel");
 const watchlistModel = require("../models/watchlistModel");
 
-// The scheduler only fetches XNAS, XNYS and XHEL, so these stocks never
-// spend market data API requests.
+// The scheduler only fetches enabled real exchanges (ENABLED_EXCHANGES), so
+// these stocks never spend market data API requests.
 const MOCK_EXCHANGE = "MOCK";
 const INTERVAL = "15min";
 const INTERVAL_MS = 15 * 60 * 1000;
