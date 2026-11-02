@@ -7,11 +7,12 @@ import { useAuth } from "../context/useAuth";
 import { mockApi, restoreApi } from "../test/mockApi";
 
 vi.mock("../context/useAuth", () => ({ useAuth: vi.fn() }));
+vi.mock("../components/NotificationCenter", () => ({ default: () => <button>Notifications</button> }));
 afterEach(restoreApi);
 const apple = { id: 1, symbol: "AAPL", name: "Apple", exchange: "XNAS", currency: "USD", close: "105", day_change_percent: "5", follower_count: 3, price_time: "2026-10-23T14:00:00Z" };
 const overview = { gainers: [apple], losers: [], mostFollowed: [apple], generatedAt: "2026-10-26T12:00:00Z" };
 function renderHome(authenticated = false) {
-  useAuth.mockReturnValue({ isAuthenticated: authenticated, isLoading: false });
+  useAuth.mockReturnValue({ isAuthenticated: authenticated, isLoading: false, user: { username: "Jouni", role: "user" } });
   return render(<MemoryRouter><Home /></MemoryRouter>);
 }
 
@@ -35,6 +36,27 @@ test("reloads the selected market and offers signed-in users their workspace", a
   expect(calls).toHaveLength(2);
   expect(screen.getByRole("link", { name: /Open my stocks/ })).toHaveAttribute("href", "/stocks");
   expect(screen.queryByRole("link", { name: /Create your watchlist/ })).not.toBeInTheDocument();
+});
+
+test("uses the app navbar with notifications and the account menu when logged in", async () => {
+  mockApi({ "GET /stocks/overview": () => [200, overview] });
+  renderHome(true);
+  await screen.findByRole("region", { name: "Top gainers" });
+  const nav = screen.getByRole("navigation", { name: "Main navigation" });
+  expect(within(nav).getByRole("link", { name: "Markets" })).toHaveAttribute("aria-current", "page");
+  expect(within(nav).getByRole("link", { name: "My stocks" })).toHaveAttribute("href", "/stocks");
+  expect(within(nav).getByRole("link", { name: "Alerts" })).toHaveAttribute("href", "/alerts");
+  expect(screen.getByRole("button", { name: "Notifications" })).toBeInTheDocument();
+  expect(screen.getByText("Jouni")).toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Login" })).not.toBeInTheDocument();
+});
+
+test("shows no main navigation when logged out", async () => {
+  mockApi({ "GET /stocks/overview": () => [200, overview] });
+  renderHome();
+  await screen.findByRole("region", { name: "Top gainers" });
+  expect(screen.queryByRole("navigation", { name: "Main navigation" })).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Login" })).toBeInTheDocument();
 });
 
 test("shows an error, then recovers when refreshed", async () => {

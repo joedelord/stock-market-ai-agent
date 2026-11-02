@@ -1,9 +1,16 @@
 const stockModel = require("../models/stockModel");
-const { calculateStockMetrics } = require("../services/stockMetrics");
-const { generateStockAnalysis } = require("../services/groqService");
+const {
+  calculateStockMetrics,
+  calculateDailyVolatility,
+  calculateDayMovement,
+} = require("../services/stockMetrics");
+const { getOrCreateStockAnalysis } = require("../services/stockAnalysisService");
+const { getStockNews } = require("../services/stockNewsService");
 
 const ANALYSIS_PRICE_LIMIT = 100;
 const ANALYSIS_INTERVAL = "15min";
+// About 60 trading days of 15-minute bars on the longest supported session.
+const VOLATILITY_PRICE_LIMIT = 2500;
 
 const createStockAnalysis = async (req, res, next) => {
   try {
@@ -33,17 +40,37 @@ const createStockAnalysis = async (req, res, next) => {
 
     const metrics = calculateStockMetrics(prices, ANALYSIS_INTERVAL);
 
-    const analysis = await generateStockAnalysis({
+    const quote = await stockModel.getStockQuote(stockId);
+    let volatility = null;
+
+    if (quote?.price_time) {
+      const history = await stockModel.getStockPrices(
+        stockId,
+        VOLATILITY_PRICE_LIMIT,
+        ANALYSIS_INTERVAL,
+      );
+      volatility = calculateDailyVolatility(history, stock.exchange, quote.price_time);
+    }
+
+    metrics.dayMovement = calculateDayMovement(quote, volatility);
+
+    const news = await getStockNews({ stock, dayMovement: metrics.dayMovement });
+
+    const result = await getOrCreateStockAnalysis({
       stock,
       metrics,
+      news,
     });
 
     res.set("Cache-Control", "no-store");
 
     return res.json({
       stock,
-      metrics,
-      analysis,
+      metrics: result.metrics,
+      analysis: result.analysis,
+      cached: result.cached,
+      stale: result.stale,
+      news: result.news,
     });
   } catch (error) {
     return next(error);

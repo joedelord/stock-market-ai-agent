@@ -308,9 +308,9 @@ function StockDashboard() {
               <p className="mt-2 text-xs text-gray-500">
                 15 min change compares the latest stored bars of the same
                 interval. Day change uses a separate quote and the previous
-                trading day's close. Its quote price and time (Helsinki) are
-                shown below the percentage. Select a stock name to open its
-                chart.
+                trading day's close. The previous close, quote price and quote
+                time (Helsinki) are shown below the percentage. Select a stock
+                name to open its chart.
               </p>
             </section>
 

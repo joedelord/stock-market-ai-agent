@@ -71,7 +71,8 @@ function StockList({
         <caption className="sr-only">
           Stocks. The 15 min change compares the two latest stored prices. The
           day change compares the latest quote with the previous trading day's
-          close; its quote price and time are shown below it. Select a stock to
+          close; the previous close, quote price and quote time are shown
+          below it. Select a stock to
           see its chart.
         </caption>
 
@@ -168,9 +169,14 @@ function StockList({
                   {formatChange(dayChange)}
 
                   {/* Visible rather than a tooltip, so touch and keyboard
-                      users can see which quote the change comes from. */}
+                      users can see which prices the change is calculated
+                      from. */}
                   {quote && (
                     <span className="mt-1 block text-xs font-normal text-gray-500">
+                      <span className="sr-only">From </span>
+                      {formatPrice(quote.previous_close, stock.currency)}
+                      <span aria-hidden="true"> → </span>
+                      <span className="sr-only"> to </span>
                       {formatPrice(quote.close, stock.currency)} ·{" "}
                       {formatTime(quote.price_time)}
                     </span>

@@ -15,7 +15,8 @@
     "market:watch": "node scripts/startMarketScheduler.js",
     "market:watch:dev": "node --watch scripts/startMarketScheduler.js",
     "seed:mock": "node scripts/seedMockData.js",
-    "email:test": "node scripts/sendTestEmail.js"
+    "email:test": "node scripts/sendTestEmail.js",
+    "eval:analysis": "node scripts/evalAnalysisPrompt.js"
   },
   "keywords": [],
   "author": "",

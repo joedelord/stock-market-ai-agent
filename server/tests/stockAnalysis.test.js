@@ -3,9 +3,10 @@ const request = require("supertest");
 const app = require("../app");
 const pool = require("../config/db");
 
-const { createStock, saveStockPrices } = require("../models/stockModel");
+const { createStock, saveStockPrices, saveStockQuote } = require("../models/stockModel");
 const { createUserAccount } = require("../services/userService");
 const { clearDatabase } = require("./helpers/database");
+const logger = require("../utils/logger");
 
 const START_TIME = Date.parse("2026-10-19T13:30:00.000Z");
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
@@ -40,7 +41,15 @@ const groqResponse = () => ({
     choices: [
       {
         finish_reason: "stop",
-        message: { content: "Price rose over the supplied period." },
+        message: {
+          content: JSON.stringify({
+            priceMovement: "Price rose over the supplied period.",
+            movingAverages: "Too few points for moving averages.",
+            newsContext: "News was not requested.",
+            limitations: "The data may be incomplete.",
+            citedArticles: [],
+          }),
+        },
       },
     ],
   }),
@@ -73,6 +82,7 @@ describe("Stock analysis", () => {
 
     vi.stubEnv("GROQ_API_KEY", "test-api-key");
     vi.stubEnv("GROQ_MODEL", "test-model");
+    vi.stubEnv("MARKETAUX_API_KEY", "");
 
     fetchMock = vi.fn().mockResolvedValue(groqResponse());
     vi.stubGlobal("fetch", fetchMock);
@@ -88,6 +98,7 @@ describe("Stock analysis", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
+    vi.restoreAllMocks();
   });
 
   afterAll(async () => {
@@ -129,10 +140,37 @@ describe("Stock analysis", () => {
     });
 
     expect(response.body.analysis).toMatchObject({
-      text: "Price rose over the supplied period.",
+      sections: {
+        priceMovement: "Price rose over the supplied period.",
+        limitations: "The data may be incomplete.",
+      },
+      citedArticles: [],
       model: "test-model",
     });
 
+    expect(response.body.metrics.dayMovement).toBeNull();
+    expect(response.body.news.status).toBe("not_requested");
+    expect(response.body.stale).toBe(false);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  test("passes the stored day movement to Groq independently of interval changes", async () => {
+    await saveQuarterHourPrices(stock.id, 3);
+    await saveStockQuote(stock.id, {
+      priceTime: "2026-10-19T14:00:00.000Z", close: 97, previousClose: 100,
+    });
+    const agent = await loginAsUser();
+    const response = await agent.post(`/api/stocks/${stock.id}/analysis`);
+    expect(response.status).toBe(200);
+    expect(response.body.metrics.dayMovement).toMatchObject({
+      changePercent: -3, isSignificant: true, direction: "down",
+    });
+    expect(response.body.metrics.latestChangePercent).toBeGreaterThan(0);
+    expect(response.body.news.status).toBe("not_configured");
+    const payload = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const { previousClose, ...dayMovement } = response.body.metrics.dayMovement;
+    expect(JSON.parse(payload.messages[1].content).metrics.dayMovement)
+      .toEqual({ ...dayMovement, previousSessionClose: previousClose });
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
@@ -226,5 +264,184 @@ describe("Stock analysis", () => {
     expect(response.body).toEqual({
       error: "AI analysis service returned an error.",
     });
+  });
+
+  test("reuses a stored analysis while the input is unchanged", async () => {
+    await saveQuarterHourPrices(stock.id, 3);
+
+    const agent = await loginAsUser();
+
+    const first = await agent.post(`/api/stocks/${stock.id}/analysis`);
+    const second = await agent.post(`/api/stocks/${stock.id}/analysis`);
+
+    expect(first.body.cached).toBe(false);
+    expect(second.status).toBe(200);
+    expect(second.body.cached).toBe(true);
+    expect(second.body.analysis).toEqual(first.body.analysis);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  test("creates a new analysis when a new price bar arrives", async () => {
+    await saveQuarterHourPrices(stock.id, 3);
+
+    const agent = await loginAsUser();
+
+    await agent.post(`/api/stocks/${stock.id}/analysis`);
+    await saveQuarterHourPrices(stock.id, 4);
+    const response = await agent.post(`/api/stocks/${stock.id}/analysis`);
+
+    expect(response.body.cached).toBe(false);
+    expect(response.body.metrics.pointCount).toBe(4);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("does not reuse an analysis after it expires", async () => {
+    await saveQuarterHourPrices(stock.id, 3);
+
+    const agent = await loginAsUser();
+
+    await agent.post(`/api/stocks/${stock.id}/analysis`);
+    await pool.query(
+      "UPDATE stock_analyses SET created_at = NOW() - INTERVAL '31 minutes'",
+    );
+    const response = await agent.post(`/api/stocks/${stock.id}/analysis`);
+
+    expect(response.body.cached).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("shares one AI request between simultaneous identical requests", async () => {
+    await saveQuarterHourPrices(stock.id, 3);
+
+    // Keeps the first Groq call open while the second request arrives.
+    fetchMock.mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve(groqResponse()), 500)),
+    );
+
+    const agent = await loginAsUser();
+
+    const responses = await Promise.all([
+      agent.post(`/api/stocks/${stock.id}/analysis`),
+      agent.post(`/api/stocks/${stock.id}/analysis`),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([200, 200]);
+    expect(responses.map((response) => response.body.cached).sort()).toEqual([false, true]);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  describe("when Groq is busy", () => {
+    const busyResponse = () => ({
+      ok: false,
+      status: 429,
+      headers: new Headers(),
+      json: vi.fn().mockResolvedValue({ error: { message: "Rate limit reached" } }),
+    });
+
+    test("returns the latest analysis with the data it was written from", async () => {
+      const info = vi.spyOn(logger, "info");
+      await saveQuarterHourPrices(stock.id, 3);
+
+      const agent = await loginAsUser();
+
+      const first = await agent.post(`/api/stocks/${stock.id}/analysis`);
+      await saveQuarterHourPrices(stock.id, 4);
+      fetchMock.mockResolvedValueOnce(busyResponse());
+      const response = await agent.post(`/api/stocks/${stock.id}/analysis`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.stale).toBe(true);
+      expect(response.body.cached).toBe(true);
+      expect(response.body.analysis).toEqual(first.body.analysis);
+      expect(response.body.metrics).toEqual(first.body.metrics);
+      expect(response.body.news).toEqual(first.body.news);
+      expect(response.body.metrics.pointCount).toBe(3);
+      expect(info).toHaveBeenCalledWith(
+        expect.objectContaining({ stockId: stock.id }),
+        "Groq busy, returned a stale analysis",
+      );
+    });
+
+    test("does not return an analysis older than six hours", async () => {
+      await saveQuarterHourPrices(stock.id, 3);
+
+      const agent = await loginAsUser();
+
+      await agent.post(`/api/stocks/${stock.id}/analysis`);
+      await pool.query(
+        "UPDATE stock_analyses SET created_at = NOW() - INTERVAL '7 hours'",
+      );
+      fetchMock.mockResolvedValueOnce(busyResponse());
+      const response = await agent.post(`/api/stocks/${stock.id}/analysis`);
+
+      expect(response.status).toBe(503);
+      expect(response.body).toEqual({
+        error: "AI analysis is temporarily busy. Please try again later.",
+      });
+    });
+
+    test("does not use stored analyses for other errors", async () => {
+      await saveQuarterHourPrices(stock.id, 3);
+
+      const agent = await loginAsUser();
+
+      await agent.post(`/api/stocks/${stock.id}/analysis`);
+      await saveQuarterHourPrices(stock.id, 4);
+      fetchMock.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        headers: new Headers(),
+        json: vi.fn().mockResolvedValue({}),
+      });
+      const response = await agent.post(`/api/stocks/${stock.id}/analysis`);
+
+      expect(response.status).toBe(502);
+    });
+  });
+
+  test("does not store failed analyses", async () => {
+    await saveQuarterHourPrices(stock.id, 3);
+
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      headers: new Headers(),
+      json: vi.fn().mockResolvedValue({}),
+    });
+
+    const agent = await loginAsUser();
+
+    const failed = await agent.post(`/api/stocks/${stock.id}/analysis`);
+    const retried = await agent.post(`/api/stocks/${stock.id}/analysis`);
+
+    expect(failed.status).toBe(502);
+    expect(retried.status).toBe(200);
+    expect(retried.body.cached).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("does not store an analysis written during a news outage", async () => {
+    await saveQuarterHourPrices(stock.id, 3);
+    await saveStockQuote(stock.id, {
+      priceTime: "2026-10-19T14:00:00.000Z", close: 97, previousClose: 100,
+    });
+    vi.stubEnv("MARKETAUX_API_KEY", "test-news-key");
+
+    fetchMock.mockImplementation((url) =>
+      String(url).startsWith("https://api.marketaux.com")
+        ? Promise.reject(new Error("News provider down"))
+        : Promise.resolve(groqResponse()),
+    );
+
+    const agent = await loginAsUser();
+
+    const first = await agent.post(`/api/stocks/${stock.id}/analysis`);
+    const second = await agent.post(`/api/stocks/${stock.id}/analysis`);
+
+    expect(first.body.news.status).toBe("unavailable");
+    expect(second.body.cached).toBe(false);
+
+    const { rows } = await pool.query("SELECT COUNT(*)::int AS count FROM stock_analyses");
+    expect(rows[0].count).toBe(0);
   });
 });
