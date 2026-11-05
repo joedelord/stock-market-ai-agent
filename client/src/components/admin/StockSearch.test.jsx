@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import StockSearch from "./StockSearch";
 import { mockApi, restoreApi } from "../../test/mockApi";
@@ -118,5 +118,47 @@ describe("StockSearch", () => {
     expect(
       await screen.findByText("No stocks found on supported exchanges."),
     ).toBeInTheDocument();
+  });
+});
+
+describe("StockSearch with the admin catalog", () => {
+  test("offers Add again for a stock removed after the search", async () => {
+    const user = userEvent.setup();
+
+    mockApi({
+      "GET /stocks/search": () => [200, { results: [nokia] }],
+    });
+
+    const { rerender } = render(<StockSearch />);
+
+    await search(user, "nokia");
+
+    expect(await screen.findByText("Added")).toBeInTheDocument();
+
+    rerender(<StockSearch removedKeys={new Set(["NOKIA:XHEL"])} />);
+
+    expect(
+      screen.getByRole("button", { name: "Add NOKIA on XHEL" }),
+    ).toBeInTheDocument();
+  });
+
+  test("reports an added stock to the admin page", async () => {
+    const user = userEvent.setup();
+    const onStockAdded = vi.fn();
+
+    mockApi({
+      "GET /stocks/search": () => [200, { results: [apple] }],
+      "POST /stocks": () => [201, { stock: { id: "8" } }],
+    });
+
+    render(<StockSearch onStockAdded={onStockAdded} />);
+
+    await search(user, "apple");
+    await user.click(
+      await screen.findByRole("button", { name: "Add AAPL on XNAS" }),
+    );
+
+    expect(await screen.findByText("Added")).toBeInTheDocument();
+    expect(onStockAdded).toHaveBeenCalledWith("AAPL:XNAS");
   });
 });

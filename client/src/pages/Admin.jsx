@@ -5,7 +5,9 @@ import api from "../services/api";
 import { getErrorMessage } from "../services/errors";
 import UserTable from "../components/admin/UserTable";
 import AddUserForm from "../components/admin/AddUserForm";
+import StockCatalog from "../components/admin/StockCatalog";
 import StockSearch from "../components/admin/StockSearch";
+import { toStockKey } from "../components/admin/stockKey";
 
 const PAGE_SIZE = 20;
 
@@ -20,6 +22,8 @@ function Admin() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+  const [catalogReloadKey, setCatalogReloadKey] = useState(0);
+  const [removedStockKeys, setRemovedStockKeys] = useState(() => new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -121,6 +125,19 @@ function Admin() {
     }
   };
 
+  const handleStockAdded = (key) => {
+    setRemovedStockKeys((current) => {
+      const next = new Set(current);
+      next.delete(key);
+      return next;
+    });
+    setCatalogReloadKey((count) => count + 1);
+  };
+
+  const handleStockDeleted = (stock) => {
+    setRemovedStockKeys((current) => new Set(current).add(toStockKey(stock)));
+  };
+
   if (isLoading) {
     return <p>Loading users...</p>;
   }
@@ -201,7 +218,18 @@ function Admin() {
         </nav>
       )}
 
-      {isAdmin && <StockSearch />}
+      {isAdmin && (
+        <>
+          <StockCatalog
+            reloadKey={catalogReloadKey}
+            onStockDeleted={handleStockDeleted}
+          />
+          <StockSearch
+            removedKeys={removedStockKeys}
+            onStockAdded={handleStockAdded}
+          />
+        </>
+      )}
     </main>
   );
 }

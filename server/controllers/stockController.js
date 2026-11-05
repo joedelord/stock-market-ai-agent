@@ -1,5 +1,6 @@
 const stockModel = require("../models/stockModel");
 const stockSearchService = require("../services/stockSearchService");
+const { getMaxActiveStocks } = require("../config/stockLimit");
 
 const UNIQUE_VIOLATION = "23505";
 
@@ -33,12 +34,15 @@ const createStock = async (req, res, next) => {
   try {
     const { symbol, exchange, name, currency } = req.body;
 
-    const stock = await stockModel.createStock({
-      symbol,
-      exchange,
-      name,
-      currency,
-    });
+    const stock = await stockModel.createStockWithinLimit(
+      {
+        symbol,
+        exchange,
+        name,
+        currency,
+      },
+      getMaxActiveStocks(),
+    );
 
     return res.status(201).json({ stock });
   } catch (error) {
@@ -48,6 +52,41 @@ const createStock = async (req, res, next) => {
       });
     }
 
+    return next(error);
+  }
+};
+
+const deleteStock = async (req, res, next) => {
+  try {
+    const stock = await stockModel.deleteStock(req.validatedParams.id);
+
+    if (!stock) {
+      return res.status(404).json({
+        error: "Stock not found",
+      });
+    }
+
+    return res.json({
+      message: "Stock deleted",
+      stock,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const getStockCatalog = async (req, res, next) => {
+  try {
+    const stocks = await stockModel.getStockCatalog();
+
+    return res.json({
+      stocks,
+      limit: {
+        active: stocks.filter((stock) => stock.is_active).length,
+        max: getMaxActiveStocks(),
+      },
+    });
+  } catch (error) {
     return next(error);
   }
 };
@@ -97,6 +136,8 @@ module.exports = {
   getStocks,
   getStockById,
   createStock,
+  deleteStock,
+  getStockCatalog,
   getStockPrices,
   searchProviderStocks,
 };

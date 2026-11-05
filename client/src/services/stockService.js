@@ -36,6 +36,19 @@ export async function createStock(stock) {
   return data.stock;
 }
 
+// Every stock with follower and alert counts, and the active stock limit.
+// Admin only.
+export async function getStockCatalog({ signal } = {}) {
+  const { data } = await api.get("/stocks/catalog", { signal });
+
+  return data;
+}
+
+// Removes the stock for every user. Admin only.
+export async function deleteStock(id) {
+  await api.delete(`/stocks/${encodeURIComponent(id)}`);
+}
+
 export async function createStockAnalysis(id, { signal } = {}) {
   const { data } = await api.post(
     `/stocks/${encodeURIComponent(id)}/analysis`,
