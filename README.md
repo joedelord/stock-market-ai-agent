@@ -22,7 +22,8 @@ Work in progress.
   AI stock analysis, watchlists, price alerts with in-app and email
   notifications, email verification, market holidays and early closes in
   the scheduler, admin-only stock creation with a Twelve Data search UI.
-- Not yet done: a production email provider.
+- Not yet done: choosing a production email provider (any SMTP provider
+  works, see [Email](#email)).
 
 ## Tech stack
 
@@ -151,7 +152,9 @@ Other options:
   is not configured.
 
 The server refuses to start if `JWT_SECRET` or the database settings are
-missing, or if `ENABLED_EXCHANGES` contains an unknown code. `TWELVE_DATA_API_KEY` is only needed to fetch market data.
+missing, or if `ENABLED_EXCHANGES` contains an unknown code. With
+`NODE_ENV=production` it also requires `CLIENT_ORIGIN`, `SMTP_HOST` and
+`MAIL_FROM`, so email links and delivery cannot fail silently. `TWELVE_DATA_API_KEY` is only needed to fetch market data.
 Without `GROQ_API_KEY` and `GROQ_MODEL` everything else works, and the
 analysis endpoint returns `503`.
 
@@ -656,6 +659,12 @@ and `MAIL_FROM` variables. Locally, run [Mailpit](https://mailpit.axllent.org/)
 email with `npm run email:test -- you@example.com`. Without `SMTP_HOST`,
 development only logs emails. Tests never send email.
 
+In production, use any transactional email provider that offers SMTP
+(for example Resend, Postmark, Brevo or Amazon SES). Verify the sender
+domain with the provider, set `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`
+(`true` for port 465), `SMTP_USER`, `SMTP_PASS` and `MAIL_FROM`, and check
+delivery with `npm run email:test -- you@example.com`.
+
 ### Roles and user endpoints
 
 Roles: `user`, `moderator`, `admin`.
@@ -773,6 +782,54 @@ the alerts page and the notification center.
 | `server/` | `npm run seed:mock`        | Add mock stocks and prices |
 | `server/` | `npm test`                 | Run tests                  |
 
+## Deployment
+
+The production setup runs everything from one origin: Express serves the
+built client from `client/dist` when `SERVE_CLIENT=true`, and every path
+that is not under `/api` falls back to `index.html` for React Router. This
+keeps the `SameSite=Lax` session cookie working without CORS.
+`CLIENT_DIST_DIRECTORY` overrides the build location.
+
+The app needs three processes, all from the same code:
+
+| Process   | Command                | Runs                        |
+| --------- | ---------------------- | --------------------------- |
+| Web       | `npm start`            | Always                      |
+| Scheduler | `npm run market:watch` | Always, exactly one copy    |
+| Migrate   | `npm run migrate`      | Before each release (once)  |
+
+Run only one scheduler, or the same prices are fetched twice and Twelve
+Data credits run out sooner.
+
+### Docker
+
+The `Dockerfile` builds the client and a production server image with
+`NODE_ENV=production` and `SERVE_CLIENT=true`. Its default command starts
+the web server; override the command for the scheduler and migrations.
+
+`docker-compose.yml` runs PostgreSQL, migrations, the web server
+(http://localhost:5000) and the scheduler, with the other settings from
+`server/.env`:
+
+```bash
+docker compose up --build
+docker compose run --rm web npm run create-admin
+```
+
+On a hosting platform that builds from a Dockerfile, create one web
+service and one worker (`npm run market:watch`) from this image, run
+`npm run migrate` as the release or pre-deploy command, and use the
+platform's PostgreSQL with `DATABASE_URL` (and `DB_SSL=true` if required).
+Point the platform's health check at `/api/health`.
+
+### Without Docker
+
+```bash
+cd client && npm ci && npm run build
+cd ../server && npm ci --omit=dev
+NODE_ENV=production SERVE_CLIENT=true npm start
+```
+
 ## Production checklist
 
 - Set `NODE_ENV=production` and use HTTPS
@@ -782,6 +839,8 @@ the alerts page and the notification center.
 - Set `CLIENT_ORIGIN` to the real frontend domain
 - Check cookie settings and the `trust proxy` setting
 - Point the `SMTP_*` variables at a real email provider
+- Set `SERVE_CLIENT=true` (the Docker image does this)
+- Run `npm run migrate` before starting a new version
 - Run `npm run market:watch` as a long-running process next to the server
 - Add next year's holidays to `server/config/marketCalendar.js` each autumn
 - Run both test suites and the frontend production build

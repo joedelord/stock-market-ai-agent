@@ -1,3 +1,4 @@
+const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
@@ -14,6 +15,11 @@ const alertRoutes = require("./routes/alerts");
 const notificationRoutes = require("./routes/notifications");
 
 const errorHandler = require("./middleware/errorHandler");
+const serveClient = require("./middleware/serveClient");
+
+const CLIENT_DIST_DIRECTORY =
+  process.env.CLIENT_DIST_DIRECTORY ||
+  path.resolve(__dirname, "../client/dist");
 
 const app = express();
 
@@ -59,6 +65,10 @@ app.use("/api/stocks", stockRoutes);
 app.use("/api/me/stocks", watchlistRoutes);
 app.use("/api/alerts", alertRoutes);
 app.use("/api/notifications", notificationRoutes);
+
+if (process.env.SERVE_CLIENT === "true") {
+  app.use(serveClient(CLIENT_DIST_DIRECTORY));
+}
 
 app.use((req, res) => {
   res.status(404).json({
