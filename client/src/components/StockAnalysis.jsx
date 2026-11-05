@@ -95,7 +95,7 @@ function StockAnalysis({ stock }) {
 
           <p className="mt-2 text-sm text-gray-600">
             A summary of stored price movements and moving averages. Company news is checked for significant day movements when configured.
-            Company financial statements are not included.
+            Company financial statements are not included. Not investment advice.
           </p>
         </div>
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
+import AppFooter from "../components/AppFooter";
 import AppHeader from "../components/AppHeader";
 import PublicHeader from "../components/PublicHeader";
 import { useAuth } from "../context/useAuth";
@@ -338,9 +339,7 @@ function Home() {
         )}
       </main>
 
-      <footer className="app-footer">
-        Stock Market AI · Your personal market workspace
-      </footer>
+      <AppFooter />
     </div>
   );
 }

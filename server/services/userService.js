@@ -182,6 +182,25 @@ const resendEmailVerification = async (userId) => {
   await sendEmailVerification(user);
 };
 
+// Asks for the password again so a session left open on a shared computer
+// cannot delete the account. Watchlist, alerts, notifications and tokens are
+// removed by ON DELETE CASCADE.
+const deleteOwnAccount = async (userId, password) => {
+  const passwordHash = await authModel.findPasswordHashById(userId);
+
+  if (!passwordHash) {
+    throw new HttpError(404, "User not found");
+  }
+
+  const passwordMatches = await bcrypt.compare(password, passwordHash);
+
+  if (!passwordMatches) {
+    throw new HttpError(400, "Password is incorrect");
+  }
+
+  return userModel.deleteUser(userId);
+};
+
 module.exports = {
   createUserAccount,
   authenticate,
@@ -191,4 +210,5 @@ module.exports = {
   resetPassword,
   verifyEmail,
   resendEmailVerification,
+  deleteOwnAccount,
 };

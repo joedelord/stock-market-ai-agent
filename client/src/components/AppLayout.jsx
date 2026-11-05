@@ -1,4 +1,5 @@
 import { Outlet } from "react-router";
+import AppFooter from "./AppFooter";
 import AppHeader from "./AppHeader";
 import EmailVerificationBanner from "./EmailVerificationBanner";
 
@@ -8,7 +9,7 @@ export default function AppLayout() {
       <AppHeader />
       <EmailVerificationBanner />
       <Outlet />
-      <footer className="app-footer">Stock Market AI · Your personal market workspace</footer>
+      <AppFooter />
     </div>
   );
 }

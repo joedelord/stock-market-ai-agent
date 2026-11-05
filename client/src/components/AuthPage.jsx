@@ -1,3 +1,4 @@
+import AppFooter from "./AppFooter";
 import PublicHeader from "./PublicHeader";
 
 export default function AuthPage({ title, description, children }) {
@@ -23,7 +24,7 @@ export default function AuthPage({ title, description, children }) {
           {children}
         </section>
       </main>
-      <footer className="app-footer">Stock Market AI · Your personal market workspace</footer>
+      <AppFooter />
     </div>
   );
 }
