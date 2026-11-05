@@ -1,0 +1,59 @@
+# Runs the production image locally or on a single server:
+#   docker compose up --build
+# Values come from server/.env; the database settings below override it so
+# the containers use the bundled PostgreSQL. Inside a container 127.0.0.1 is
+# the container itself, so for Mailpit running on the host set
+# SMTP_HOST=host.docker.internal in server/.env.
+
+x-app: &app
+  build: .
+  env_file: server/.env
+  environment:
+    NODE_ENV: production
+    # Fixed so the port mapping below matches whatever server/.env says.
+    PORT: 5000
+    DATABASE_URL: postgres://postgres:postgres@db:5432/stock_market_db
+  depends_on:
+    db:
+      condition: service_healthy
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: stock_market_db
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    <<: *app
+    command: ["npm", "run", "migrate"]
+
+  # Set CLIENT_ORIGIN in server/.env to the address users open (for example
+  # http://localhost:5000), since email links are built from it.
+  web:
+    <<: *app
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  scheduler:
+    <<: *app
+    command: ["npm", "run", "market:watch"]
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  db-data:
