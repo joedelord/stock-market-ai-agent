@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 import AppLayout from "./components/AppLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import RoleRoute from "./components/RoleRoute";
+import ScrollToTop from "./components/ScrollToTop";
 
 import Admin from "./pages/Admin";
 import Alerts from "./pages/Alerts";
@@ -22,6 +23,7 @@ import StockDashboard from "./pages/StockDashboard";
 function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <Routes>
         <Route path="/" element={<Home />} />
 
