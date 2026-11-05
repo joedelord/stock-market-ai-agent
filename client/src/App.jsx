@@ -12,6 +12,7 @@ import ForgotPassword from "./pages/ForgotPassword";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
+import Privacy from "./pages/Privacy";
 import Register from "./pages/Register";
 import ResetPassword from "./pages/ResetPassword";
 import VerifyEmail from "./pages/VerifyEmail";
@@ -33,6 +34,8 @@ function App() {
         <Route path="/reset-password" element={<ResetPassword />} />
 
         <Route path="/verify-email" element={<VerifyEmail />} />
+
+        <Route path="/privacy" element={<Privacy />} />
 
         <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<Navigate to="/stocks" replace />} />

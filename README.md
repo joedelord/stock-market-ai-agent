@@ -251,15 +251,23 @@ an update right away, which uses Twelve Data requests.
 | `/`                 | public          | Market movers and most followed       |
 | `/stocks`           | logged in       | Watchlist, price chart, AI analysis   |
 | `/alerts`           | logged in       | Create, edit, pause and delete alerts |
-| `/account`          | logged in       | Profile and account details           |
+| `/account`          | logged in       | Profile, account details, deletion    |
 | `/account/password` | logged in       | Change password                       |
 | `/admin`            | moderator/admin | Users; adding stocks (admin only)     |
+| `/privacy`          | public          | Privacy and terms of use              |
 
 Logged-in pages share a header with navigation, the notification bell and
 an account menu (profile, password, administration, log out). Registration
 leads to `/stocks`. Login leads back to the page the user tried to open, or
 to `/stocks`.
 The old `/dashboard` path redirects to `/stocks`.
+
+`/privacy` says what is stored, which outside services receive data and
+that nothing in the app is investment advice. The footer and the
+registration form link to it. To show a contact address on it, set
+`VITE_CONTACT_EMAIL` when building the client (for Docker:
+`docker build --build-arg VITE_CONTACT_EMAIL=privacy@yourdomain.com .`).
+Update the page if you add services that receive user data.
 
 On `/stocks` the user picks the stocks on their watchlist. The list shows
 each stock's latest price and day change. The chart shows the selected
@@ -636,11 +644,17 @@ session on every device.
 | POST   | `/api/auth/login`               | Log in                       |
 | POST   | `/api/auth/logout`              | Log out                      |
 | GET    | `/api/auth/me`                  | Return the current user      |
+| DELETE | `/api/auth/me`                  | Delete the own account       |
 | PATCH  | `/api/auth/password`            | Change the password          |
 | POST   | `/api/auth/forgot-password`     | Request a password reset     |
 | POST   | `/api/auth/reset-password`      | Set a new password by token  |
 | POST   | `/api/auth/verify-email`        | Verify the email by token    |
 | POST   | `/api/auth/resend-verification` | Send a new verification link |
+
+Deleting the own account needs the current password in the body
+(`{ "password": "..." }`). It removes the user's watchlist, alerts,
+notifications and tokens, ends every session, and refuses to delete the
+last admin.
 
 Reset links point to `CLIENT_ORIGIN/reset-password?token=...`, expire after
 one hour, and work once.
@@ -685,7 +699,7 @@ demoted or deleted.
 ### Rate limits
 
 Login is limited per IP address and, for failed attempts, per email.
-Registration, password reset requests, password changes, email
+Registration, password reset requests, password changes, account deletion, email
 verification and AI analysis are limited too. Counters are stored in
 PostgreSQL, so limits hold across
 server instances. Rate limits are off when `NODE_ENV=test`.

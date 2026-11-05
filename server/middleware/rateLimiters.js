@@ -80,6 +80,17 @@ const changePasswordLimiter = createLimiter({
   message: "Too many password change attempts. Please try again later.",
 });
 
+// Stops password guessing through account deletion. Keyed on the user, so it
+// must run after requireAuth.
+const deleteAccountLimiter = createLimiter({
+  name: "delete-account",
+  windowMs: FIFTEEN_MINUTES,
+  limit: 5,
+  skipSuccessfulRequests: true,
+  keyGenerator: (req) => String(req.user.id),
+  message: "Too many account deletion attempts. Please try again later.",
+});
+
 const emailVerificationLimiter = createLimiter({
   name: "email-verification",
   windowMs: ONE_HOUR,
@@ -124,6 +135,7 @@ module.exports = {
   passwordResetLimiter,
   passwordResetEmailLimiter,
   changePasswordLimiter,
+  deleteAccountLimiter,
   emailVerificationLimiter,
   resendVerificationLimiter,
   stockAnalysisLimiter,

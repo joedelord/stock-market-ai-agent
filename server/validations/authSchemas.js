@@ -59,6 +59,12 @@ const verifyEmailSchema = z.object({
   }),
 });
 
+const deleteAccountSchema = z.object({
+  body: z.object({
+    password: z.string().min(1, "Password is required"),
+  }),
+});
+
 module.exports = {
   registerSchema,
   loginSchema,
@@ -66,4 +72,5 @@ module.exports = {
   forgotPasswordSchema,
   resetPasswordSchema,
   verifyEmailSchema,
+  deleteAccountSchema,
 };

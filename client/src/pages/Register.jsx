@@ -106,6 +106,15 @@ function Register() {
           </p>
         )}
 
+        <p className="mt-4 text-xs leading-relaxed text-gray-500">
+          Stock Market AI is for information only and does not give
+          investment advice. By creating an account you accept the{" "}
+          <Link to="/privacy" className="text-blue-700 underline">
+            privacy and terms of use
+          </Link>
+          .
+        </p>
+
         <SubmitButton isSubmitting={isSubmitting} submittingText="Creating...">
           Create account
         </SubmitButton>

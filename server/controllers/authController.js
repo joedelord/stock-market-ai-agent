@@ -9,6 +9,7 @@ const {
   resetPassword: resetUserPassword,
   verifyEmail: verifyUserEmail,
   resendEmailVerification,
+  deleteOwnAccount,
 } = require("../services/userService");
 const { createToken, verifyToken } = require("../utils/token");
 
@@ -189,6 +190,24 @@ const resendVerification = async (req, res, next) => {
   }
 };
 
+const deleteAccount = async (req, res, next) => {
+  try {
+    await deleteOwnAccount(req.user.id, req.body.password);
+
+    res.clearCookie(COOKIE_NAME, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+    });
+
+    return res.json({
+      message: "Account deleted",
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -199,4 +218,5 @@ module.exports = {
   resetPassword,
   verifyEmail,
   resendVerification,
+  deleteAccount,
 };

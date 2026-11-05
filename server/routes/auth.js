@@ -10,6 +10,7 @@ const {
   resetPassword,
   verifyEmail,
   resendVerification,
+  deleteAccount,
 } = require("../controllers/authController");
 
 const { requireAuth } = require("../middleware/authMiddleware");
@@ -21,6 +22,7 @@ const {
   passwordResetLimiter,
   passwordResetEmailLimiter,
   changePasswordLimiter,
+  deleteAccountLimiter,
   emailVerificationLimiter,
   resendVerificationLimiter,
 } = require("../middleware/rateLimiters");
@@ -34,6 +36,7 @@ const {
   forgotPasswordSchema,
   resetPasswordSchema,
   verifyEmailSchema,
+  deleteAccountSchema,
 } = require("../validations/authSchemas");
 
 const router = express.Router();
@@ -51,6 +54,14 @@ router.post(
 router.post("/logout", logout);
 
 router.get("/me", requireAuth, getCurrentUser);
+
+router.delete(
+  "/me",
+  requireAuth,
+  deleteAccountLimiter,
+  validate(deleteAccountSchema),
+  deleteAccount,
+);
 
 router.patch(
   "/password",

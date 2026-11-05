@@ -101,6 +101,14 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  // The server clears the cookie; the user is cleared only after it succeeds,
+  // so a wrong password keeps them on the page to try again.
+  const deleteAccount = useCallback(async (password) => {
+    await api.delete("/auth/me", { data: { password } });
+
+    setUser(null);
+  }, []);
+
   const value = useMemo(
     () => ({
       user,
@@ -109,9 +117,10 @@ export function AuthProvider({ children }) {
       login,
       register,
       logout,
+      deleteAccount,
       reloadUser,
     }),
-    [user, isLoading, login, register, logout, reloadUser],
+    [user, isLoading, login, register, logout, deleteAccount, reloadUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

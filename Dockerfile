@@ -6,6 +6,9 @@ WORKDIR /app/client
 COPY client/package.json client/package-lock.json ./
 RUN npm ci
 COPY client/ ./
+# Optional contact address shown on the privacy page.
+ARG VITE_CONTACT_EMAIL
+ENV VITE_CONTACT_EMAIL=$VITE_CONTACT_EMAIL
 RUN npm run build
 
 FROM node:24-alpine

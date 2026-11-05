@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import AccountPage from "../components/AccountPage";
+import DeleteAccountSection from "../components/DeleteAccountSection";
 import { useAuth } from "../context/useAuth";
 
 const ROLE_LABELS = { user: "Member", moderator: "Moderator", admin: "Administrator" };
@@ -35,6 +36,7 @@ export default function Profile() {
           {["admin", "moderator"].includes(user.role) && <Link to="/admin"><span className="font-semibold">Administration <span aria-hidden="true">↗</span></span><span>Manage users and account access.</span></Link>}
         </div>
       </section>
+      <DeleteAccountSection />
     </AccountPage>
   );
 }
