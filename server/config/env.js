@@ -2,6 +2,7 @@ const path = require("path");
 const dotenv = require("dotenv");
 
 const { getEnabledExchanges } = require("./exchangeMapping");
+const { getMaxActiveStocks } = require("./stockLimit");
 
 const envFile = process.env.NODE_ENV === "test" ? ".env.test" : ".env";
 
@@ -44,3 +45,4 @@ if (missingVariables.length > 0) {
 
 // Fails at startup instead of on the first scheduler run or request.
 getEnabledExchanges();
+getMaxActiveStocks();

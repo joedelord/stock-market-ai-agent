@@ -1,4 +1,8 @@
 const pool = require("../config/db");
+const HttpError = require("../utils/httpError");
+
+// Any fixed number works; it only has to be the same for every caller.
+const STOCK_LIMIT_LOCK_ID = 7300001;
 
 const getAllStocks = async () => {
   const result = await pool.query(
@@ -33,8 +37,8 @@ const getStockById = async (id) => {
   return result.rows[0];
 };
 
-const createStock = async ({ symbol, exchange, name, currency }) => {
-  const result = await pool.query(
+const insertStock = async (db, { symbol, exchange, name, currency }) => {
+  const result = await db.query(
     `INSERT INTO stocks (
       symbol,
       exchange,
@@ -54,6 +58,92 @@ const createStock = async ({ symbol, exchange, name, currency }) => {
   );
 
   return result.rows[0];
+};
+
+const createStock = async (stock) => {
+  return insertStock(pool, stock);
+};
+
+// The lock makes concurrent requests count and insert one at a time, so two
+// admins adding at once cannot go over the limit.
+const createStockWithinLimit = async (stock, maxActiveStocks) => {
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock($1)", [
+      STOCK_LIMIT_LOCK_ID,
+    ]);
+
+    const countResult = await client.query(
+      `SELECT COUNT(*)::int AS count
+       FROM stocks
+       WHERE is_active = TRUE`,
+    );
+
+    if (countResult.rows[0].count >= maxActiveStocks) {
+      throw new HttpError(
+        400,
+        `Stock limit reached (${maxActiveStocks} active stocks). Remove a stock before adding another.`,
+      );
+    }
+
+    const created = await insertStock(client, stock);
+
+    await client.query("COMMIT");
+
+    return created;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+// Prices, quotes, analyses, watchlist entries and alerts go with the stock
+// (ON DELETE CASCADE); notifications keep their text.
+const deleteStock = async (id) => {
+  const result = await pool.query(
+    `DELETE FROM stocks
+     WHERE id = $1
+     RETURNING
+       id,
+       symbol,
+       exchange,
+       name`,
+    [id],
+  );
+
+  return result.rows[0];
+};
+
+// For the admin page: shows who would be affected by removing a stock.
+const getStockCatalog = async () => {
+  const result = await pool.query(
+    `SELECT
+      s.id,
+      s.symbol,
+      s.exchange,
+      s.name,
+      s.currency,
+      s.is_active,
+      (
+        SELECT COUNT(*)
+        FROM user_stocks us
+        WHERE us.stock_id = s.id
+      )::int AS follower_count,
+      (
+        SELECT COUNT(*)
+        FROM stock_alerts a
+        WHERE a.stock_id = s.id
+          AND a.is_active = TRUE
+      )::int AS active_alert_count
+    FROM stocks s
+    ORDER BY s.symbol ASC, s.exchange ASC`,
+  );
+
+  return result.rows;
 };
 
 // Returns the stocks that match any of the given symbol and exchange pairs.
@@ -253,6 +343,9 @@ module.exports = {
   getStockById,
   getStocksBySymbolAndExchange,
   createStock,
+  createStockWithinLimit,
+  deleteStock,
+  getStockCatalog,
   getStockPrices,
   saveStockPrices,
   saveStockQuote,

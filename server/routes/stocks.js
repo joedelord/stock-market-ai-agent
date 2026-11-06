@@ -4,6 +4,8 @@ const {
   getStocks,
   getStockById,
   createStock,
+  deleteStock,
+  getStockCatalog,
   getStockPrices,
   searchProviderStocks,
 } = require("../controllers/stockController");
@@ -33,7 +35,8 @@ const {
 
 const router = express.Router();
 
-// Register before /:id so "overview" and "search" are not parsed as stock IDs.
+// Register before /:id so "overview", "search" and "catalog" are not parsed as
+// stock IDs.
 router.get("/overview", validate(marketOverviewSchema), getMarketOverview);
 
 // Searches Twelve Data, not the database, so admins can find stocks to add.
@@ -45,6 +48,9 @@ router.get(
   validate(stockSearchSchema),
   searchProviderStocks,
 );
+
+// Every stock with its follower and alert counts, and the active stock limit.
+router.get("/catalog", requireAuth, requireRole("admin"), getStockCatalog);
 
 router.get("/", getStocks);
 
@@ -67,6 +73,16 @@ router.post(
   requireRole("admin"),
   validate(createStockSchema),
   createStock,
+);
+
+// Removes the stock for every user, with its prices, watchlist entries and
+// alerts.
+router.delete(
+  "/:id",
+  requireAuth,
+  requireRole("admin"),
+  validate(stockIdSchema),
+  deleteStock,
 );
 
 module.exports = router;

@@ -147,6 +147,8 @@ Other options:
 - `ENABLED_EXCHANGES` lists the MIC codes of the exchanges the app uses,
   separated by commas (default `XNAS,XNYS`). See
   [Enabled exchanges](#enabled-exchanges).
+- `MAX_ACTIVE_STOCKS` caps the number of active stocks (default `20`).
+  See [Active stock limit](#active-stock-limit).
 - `MARKETAUX_API_KEY` is optional. It enables company news in the AI
   analysis for significant day moves; without it the analysis says news
   is not configured.
@@ -282,10 +284,12 @@ while the tab is visible.
 | GET    | `/api/stocks`              | List stocks, sorted by name     |
 | GET    | `/api/stocks/overview`     | Public market overview          |
 | GET    | `/api/stocks/search`       | Search Twelve Data (admin only) |
+| GET    | `/api/stocks/catalog`      | Stocks with usage (admin only)  |
 | GET    | `/api/stocks/:id`          | Get one stock                   |
 | GET    | `/api/stocks/:id/prices`   | Get a stock and its latest bars |
 | POST   | `/api/stocks/:id/analysis` | AI analysis (login required)    |
 | POST   | `/api/stocks`              | Add a stock (admin only)        |
+| DELETE | `/api/stocks/:id`          | Remove a stock (admin only)     |
 
 `GET /api/stocks/:id/prices` takes a `limit` query parameter (1–1000,
 default 100). It returns the newest prices in oldest-first order, ready for
@@ -348,7 +352,8 @@ response is `201` with the new stock, or `409` if the symbol already
 exists on that exchange. Only admins can add stocks, because the catalog is
 shared by every user: guests get `401` and other roles get `403`. An
 exchange that is not enabled is rejected with `400`, and the message lists
-the enabled exchanges.
+the enabled exchanges. When the [active stock limit](#active-stock-limit)
+is reached, the response is `400`.
 
 ### Adding stocks from Twelve Data
 
@@ -384,6 +389,40 @@ Data's `/symbol_search` and returns `{ results }`:
 
 A new stock gets prices only once someone follows it or creates an alert
 on it, because the price job updates tracked stocks only.
+
+### Managing stocks
+
+The `/admin` page lists every stock in the app, with the number of
+watchlists it is on and its active alerts, and a count against the limit
+(for example "18 / 20 active stocks"). It comes from
+`GET /api/stocks/catalog`, which returns
+`{ stocks, limit: { active, max } }`; each stock has `follower_count` and
+`active_alert_count`.
+
+**Remove** calls `DELETE /api/stocks/:id`. Removing a stock deletes it for
+every user, with its price history, quotes, AI analyses, watchlist entries
+and alerts. Notifications that alerts already created keep their text. The
+confirmation dialog says how many watchlists and alerts are affected.
+
+### Active stock limit
+
+`MAX_ACTIVE_STOCKS` (default `20`) caps the number of active stocks, so the
+price job cannot use up the Twelve Data quota. Adding a stock beyond it is
+rejected until an admin removes one. Concurrent additions are serialized
+with a database lock, so they cannot exceed the limit.
+
+The free Twelve Data plan allows about 800 requests a day. The scheduler
+fetches each tracked stock every 15 minutes, about 27 times per US trading
+day, plus an hourly quote (about 7 more):
+
+```text
+daily requests ≈ tracked stocks × 34
+20 stocks × 34 ≈ 680 requests (fits within 800)
+```
+
+Raise the limit only with a paid plan, or when fewer stocks are followed
+than are in the catalog. The server refuses to start if the value is not a
+positive whole number.
 
 ## AI stock analysis
 

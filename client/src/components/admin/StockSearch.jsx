@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from "react";
 
 import { createStock, searchProviderStocks } from "../../services/stockService";
 import { getErrorMessage } from "../../services/errors";
+import { toStockKey } from "./stockKey";
 
-const toKey = (stock) => `${stock.symbol}:${stock.exchange}`;
-
-function StockSearch() {
+// removedKeys lists stocks removed on the admin page after this search, so
+// their rows offer "Add" again.
+function StockSearch({ removedKeys = new Set(), onStockAdded }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState(null);
   const [addedKeys, setAddedKeys] = useState(() => new Set());
@@ -46,7 +47,7 @@ function StockSearch() {
   };
 
   const handleAdd = async (result) => {
-    const key = toKey(result);
+    const key = toStockKey(result);
 
     setAddingKey(key);
     setErrorMessage("");
@@ -60,10 +61,12 @@ function StockSearch() {
       });
 
       setAddedKeys((current) => new Set(current).add(key));
+      onStockAdded?.(key);
     } catch (error) {
       // Someone else added it after the search, so it is in the database.
       if (error.response?.status === 409) {
         setAddedKeys((current) => new Set(current).add(key));
+        onStockAdded?.(key);
       } else {
         setErrorMessage(getErrorMessage(error, "Failed to add stock"));
       }
@@ -125,8 +128,10 @@ function StockSearch() {
 
           <tbody>
             {results.map((result) => {
-              const key = toKey(result);
-              const isAdded = result.stockId !== null || addedKeys.has(key);
+              const key = toStockKey(result);
+              const isAdded =
+                !removedKeys.has(key) &&
+                (result.stockId !== null || addedKeys.has(key));
 
               return (
                 <tr key={key} className="border-b">
