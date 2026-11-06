@@ -21,16 +21,30 @@ const DATABASE_VARIABLES = process.env.DATABASE_URL
   ? []
   : ["DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME"];
 
+const GMAIL_VARIABLES = [
+  "GMAIL_CLIENT_ID",
+  "GMAIL_CLIENT_SECRET",
+  "GMAIL_REFRESH_TOKEN",
+];
+
+// Setting only some of the Gmail variables would quietly fall back to SMTP.
+const usesGmailApi = GMAIL_VARIABLES.some((name) => process.env[name]);
+
 // Without these, verification, password reset and alert emails would only
 // fail later, one request at a time.
-const PRODUCTION_VARIABLES = isProduction
-  ? ["CLIENT_ORIGIN", "SMTP_HOST", "MAIL_FROM"]
-  : [];
+const PRODUCTION_VARIABLES = isProduction ? ["CLIENT_ORIGIN", "MAIL_FROM"] : [];
+
+const EMAIL_VARIABLES = usesGmailApi
+  ? GMAIL_VARIABLES
+  : isProduction
+    ? ["SMTP_HOST"]
+    : [];
 
 const REQUIRED_VARIABLES = [
   ...DATABASE_VARIABLES,
   "JWT_SECRET",
   ...PRODUCTION_VARIABLES,
+  ...EMAIL_VARIABLES,
 ];
 
 const missingVariables = REQUIRED_VARIABLES.filter(

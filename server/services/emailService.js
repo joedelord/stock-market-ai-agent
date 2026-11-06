@@ -1,6 +1,7 @@
 const nodemailer = require("nodemailer");
 
 const logger = require("../utils/logger");
+const gmailApiService = require("./gmailApiService");
 
 const APP_NAME = "Stock Market AI";
 
@@ -34,6 +35,12 @@ const createTransporter = () => {
 
 const transporter = createTransporter();
 
+// Builds the MIME message without sending it, for the Gmail API.
+const messageBuilder = nodemailer.createTransport({
+  streamTransport: true,
+  buffer: true,
+});
+
 const escapeHtml = (value) =>
   String(value)
     .replaceAll("&", "&amp;")
@@ -43,22 +50,32 @@ const escapeHtml = (value) =>
     .replaceAll("'", "&#39;");
 
 const sendEmail = async ({ to, subject, text, html }) => {
+  const message = {
+    from: process.env.MAIL_FROM,
+    to,
+    subject,
+    text,
+    html,
+  };
+
+  // Railway's Trial and Hobby plans block outgoing SMTP, but HTTPS works.
+  if (gmailApiService.isGmailApiConfigured()) {
+    const { message: rawMessage } = await messageBuilder.sendMail(message);
+    return gmailApiService.sendRawEmail(rawMessage);
+  }
+
   if (!transporter) {
     if (process.env.NODE_ENV === "production") {
-      throw new Error("No email provider is configured (SMTP_HOST is missing)");
+      throw new Error(
+        "No email provider is configured (set SMTP_HOST or the GMAIL_* variables)",
+      );
     }
 
     logger.info({ to, subject, text }, "Email not sent, SMTP_HOST is not set");
     return undefined;
   }
 
-  return transporter.sendMail({
-    from: process.env.MAIL_FROM,
-    to,
-    subject,
-    text,
-    html,
-  });
+  return transporter.sendMail(message);
 };
 
 const sendEmailVerificationEmail = async (email, verifyUrl) => {

@@ -74,8 +74,8 @@ stock-market-ai-agent/
 │   ├── routes/                Express routers
 │   ├── scripts/               Migrations, admin creation, market data and
 │   │                          mock data tools
-│   ├── services/              Twelve Data and Groq clients, stock metrics,
-│   │                          alert checks, user logic
+│   ├── services/              Twelve Data, Groq and Gmail API clients,
+│   │                          email, stock metrics, alert checks, user logic
 │   ├── tests/                 Vitest + Supertest integration tests
 │   ├── utils/                 Logger, mailer, tokens, HTTP errors
 │   ├── validations/           Zod schemas
@@ -155,8 +155,10 @@ Other options:
 
 The server refuses to start if `JWT_SECRET` or the database settings are
 missing, or if `ENABLED_EXCHANGES` contains an unknown code. With
-`NODE_ENV=production` it also requires `CLIENT_ORIGIN`, `SMTP_HOST` and
-`MAIL_FROM`, so email links and delivery cannot fail silently. `TWELVE_DATA_API_KEY` is only needed to fetch market data.
+`NODE_ENV=production` it also requires `CLIENT_ORIGIN`, `MAIL_FROM` and
+either `SMTP_HOST` or the `GMAIL_*` variables, so email links and delivery
+cannot fail silently. Setting only some of the `GMAIL_*` variables is an
+error in every environment. `TWELVE_DATA_API_KEY` is only needed to fetch market data.
 Without `GROQ_API_KEY` and `GROQ_MODEL` everything else works, and the
 analysis endpoint returns `503`.
 
@@ -733,8 +735,52 @@ MAIL_FROM="Stock Market AI <your.account@gmail.com>"
 `SMTP_PASS` is an app password (turn on 2-Step Verification, then create one
 at myaccount.google.com/apppasswords), not the account password. `MAIL_FROM`
 must match `SMTP_USER`, or Gmail rewrites the sender. Gmail allows about 500
-recipients a day. Some free hosting plans block outgoing SMTP, so check that
-email still arrives after deploying.
+recipients a day.
+
+#### Gmail API (hosts that block SMTP)
+
+Some hosts block outgoing SMTP, for example Railway's Trial and Hobby plans.
+Gmail's HTTPS API still works there. When `GMAIL_CLIENT_ID`,
+`GMAIL_CLIENT_SECRET` and `GMAIL_REFRESH_TOKEN` are all set, the server sends
+through the Gmail API and ignores the `SMTP_*` variables. Nodemailer still
+builds the messages, so no extra packages are needed.
+
+One-time setup, signed in as the Gmail account that sends the email:
+
+1. In [Google Cloud Console](https://console.cloud.google.com/), create a
+   project and enable the **Gmail API** (APIs & Services → Library).
+2. Configure the **OAuth consent screen** (Google Auth Platform): user type
+   *External*, then under Audience click **Publish app** so the status is
+   *In production*. In *Testing* status the refresh token expires after
+   7 days. The app does not need Google's verification for your own account.
+3. Under Clients, create an **OAuth client ID** of type *Web application* and
+   add `https://developers.google.com/oauthplayground` as an authorized
+   redirect URI. Copy the client ID and secret.
+4. Open the [OAuth 2.0 Playground](https://developers.google.com/oauthplayground),
+   click the gear icon, check *Use your own OAuth credentials* and paste the
+   client ID and secret.
+5. In Step 1, enter the scope `https://www.googleapis.com/auth/gmail.send`
+   and click *Authorize APIs*. Sign in with the sending account. Google warns
+   that the app is not verified: choose *Advanced* → *Go to … (unsafe)*.
+6. In Step 2, click *Exchange authorization code for tokens* and copy the
+   refresh token.
+7. Set the variables in `server/.env` locally, or in the host's environment
+   variables in production:
+
+   ```env
+   GMAIL_CLIENT_ID=1234567890-abc.apps.googleusercontent.com
+   GMAIL_CLIENT_SECRET=GOCSPX-...
+   GMAIL_REFRESH_TOKEN=1//0g...
+   MAIL_FROM="Stock Market AI <your.account@gmail.com>"
+   ```
+
+8. Check delivery with `npm run email:test -- you@example.com`.
+
+`MAIL_FROM` must be the account that authorized the token, or Gmail replaces
+the sender. The refresh token stops working if the account password changes
+or the access is removed from the Google account. Sending then fails with
+`invalid_grant` in the server logs, and steps 4–7 give a new token. The same
+limit of about 500 recipients a day applies.
 
 ### Roles and user endpoints
 
@@ -909,8 +955,8 @@ NODE_ENV=production SERVE_CLIENT=true npm start
   Groq keys
 - Set `CLIENT_ORIGIN` to the real frontend domain
 - Check cookie settings and the `trust proxy` setting
-- Point the `SMTP_*` variables at a real email provider or a Gmail app
-  password
+- Point the `SMTP_*` variables at a real email provider, or set the
+  `GMAIL_*` variables if the host blocks SMTP
 - Set `SERVE_CLIENT=true` (the Docker image does this)
 - Run `npm run migrate` before starting a new version
 - Run `npm run market:watch` as a long-running process next to the server
