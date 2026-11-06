@@ -23,7 +23,7 @@ Work in progress.
   notifications, email verification, market holidays and early closes in
   the scheduler, admin-only stock creation with a Twelve Data search UI.
 - Not yet done: choosing a production email provider (any SMTP provider
-  works, see [Email](#email)).
+  works, Gmail included, see [Email](#email)).
 
 ## Tech stack
 
@@ -716,7 +716,25 @@ In production, use any transactional email provider that offers SMTP
 (for example Resend, Postmark, Brevo or Amazon SES). Verify the sender
 domain with the provider, set `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`
 (`true` for port 465), `SMTP_USER`, `SMTP_PASS` and `MAIL_FROM`, and check
-delivery with `npm run email:test -- you@example.com`.
+delivery with `npm run email:test -- you@example.com`. These providers cannot
+send from a `@gmail.com` address, only from a domain you own.
+
+Without a domain, a Gmail account works for small projects:
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=your.account@gmail.com
+SMTP_PASS=your_16_char_app_password
+MAIL_FROM="Stock Market AI <your.account@gmail.com>"
+```
+
+`SMTP_PASS` is an app password (turn on 2-Step Verification, then create one
+at myaccount.google.com/apppasswords), not the account password. `MAIL_FROM`
+must match `SMTP_USER`, or Gmail rewrites the sender. Gmail allows about 500
+recipients a day. Some free hosting plans block outgoing SMTP, so check that
+email still arrives after deploying.
 
 ### Roles and user endpoints
 
@@ -891,7 +909,8 @@ NODE_ENV=production SERVE_CLIENT=true npm start
   Groq keys
 - Set `CLIENT_ORIGIN` to the real frontend domain
 - Check cookie settings and the `trust proxy` setting
-- Point the `SMTP_*` variables at a real email provider
+- Point the `SMTP_*` variables at a real email provider or a Gmail app
+  password
 - Set `SERVE_CLIENT=true` (the Docker image does this)
 - Run `npm run migrate` before starting a new version
 - Run `npm run market:watch` as a long-running process next to the server
