@@ -3,6 +3,7 @@ import { Link } from "react-router";
 
 import FormField from "../components/FormField";
 import AuthPage from "../components/AuthPage";
+import SpamFolderHint from "../components/SpamFolderHint";
 import SubmitButton from "../components/SubmitButton";
 import api from "../services/api";
 import { getErrorMessage } from "../services/errors";
@@ -33,9 +34,12 @@ function ForgotPassword() {
   return (
     <AuthPage title="Forgot password">
       {successMessage ? (
-        <p role="status" className="text-green-700">
-          {successMessage}
-        </p>
+        <>
+          <p role="status" className="text-green-700">
+            {successMessage}
+          </p>
+          <SpamFolderHint className="mt-4" />
+        </>
       ) : (
         <form onSubmit={handleSubmit}>
           <p className="mb-3 text-sm text-gray-600">

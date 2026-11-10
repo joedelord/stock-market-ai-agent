@@ -22,6 +22,8 @@ const sendTestEmails = async () => {
     await emailService.sendAlertNotificationEmail(
       to,
       "AAPL (XNAS) is at 205.00 USD, at or above your alert of 200 USD.",
+      // Not a valid token, so clicking the link changes nobody's settings.
+      "test-token",
     );
 
     console.log(`Sent 4 test emails to ${to}`);

@@ -10,6 +10,8 @@ const {
   verifyEmail: verifyUserEmail,
   resendEmailVerification,
   deleteOwnAccount,
+  setEmailAlertsEnabled,
+  unsubscribeFromAlertEmails,
 } = require("../services/userService");
 const { createToken, verifyToken } = require("../utils/token");
 
@@ -208,6 +210,33 @@ const deleteAccount = async (req, res, next) => {
   }
 };
 
+const updateEmailPreferences = async (req, res, next) => {
+  try {
+    const user = await setEmailAlertsEnabled(
+      req.user.id,
+      req.body.emailAlertsEnabled,
+    );
+
+    return res.json({
+      user,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const unsubscribe = async (req, res, next) => {
+  try {
+    await unsubscribeFromAlertEmails(req.validatedQuery.token);
+
+    return res.json({
+      message: "Alert emails turned off",
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -219,4 +248,6 @@ module.exports = {
   verifyEmail,
   resendVerification,
   deleteAccount,
+  updateEmailPreferences,
+  unsubscribe,
 };

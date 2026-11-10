@@ -122,6 +122,38 @@ describe("Password reset", () => {
     expect((await agent.get("/api/auth/me")).status).toBe(401);
     expect((await login("password123")).status).toBe(401);
     expect((await login("newpassword456")).status).toBe(200);
+
+    expect(sendChangedEmail).toHaveBeenCalledWith(credentials.email);
+  });
+
+  test("does not tell the owner about a failed reset", async () => {
+    await request(app).post("/api/auth/register").send(credentials);
+
+    await request(app)
+      .post("/api/auth/reset-password")
+      .send({ token: "a".repeat(64), password: "newpassword456" });
+
+    expect(sendChangedEmail).not.toHaveBeenCalled();
+  });
+
+  test("a password change cancels a pending reset link", async () => {
+    const agent = request.agent(app);
+    await agent.post("/api/auth/register").send(credentials);
+
+    const token = await requestResetToken();
+
+    await agent.patch("/api/auth/password").send({
+      currentPassword: "password123",
+      newPassword: "newpassword456",
+    });
+
+    const response = await request(app)
+      .post("/api/auth/reset-password")
+      .send({ token, password: "attackerpassword" });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ error: "Invalid or expired reset token" });
+    expect((await login("newpassword456")).status).toBe(200);
   });
 
   test("gives the same answer for unknown emails without sending email", async () => {

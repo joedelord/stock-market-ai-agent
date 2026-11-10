@@ -1,6 +1,7 @@
 const cron = require("node-cron");
 
 const logger = require("../utils/logger");
+const alertService = require("../services/alertService");
 const { updateStockPrices } = require("./updateStockPrices");
 const { MARKET_CALENDAR } = require("../config/marketCalendar");
 const { getEnabledExchanges } = require("../config/exchangeMapping");
@@ -144,6 +145,20 @@ const createMarketScheduler = ({
       );
     } catch (error) {
       logger.error({ err: error }, "Price update run failed");
+    }
+
+    // Separate from the price update, so a failed update still retries
+    // earlier alert emails, and a failed retry never hides the update.
+    if (stopController.signal.aborted) return;
+
+    try {
+      const emails = await alertService.retryAlertEmails();
+
+      if (emails.sent + emails.failed + emails.cancelled > 0) {
+        logger.info(emails, "Alert emails retried");
+      }
+    } catch (error) {
+      logger.error({ err: error }, "Alert email retry failed");
     }
   };
 

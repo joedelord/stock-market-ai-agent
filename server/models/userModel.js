@@ -64,11 +64,33 @@ const getUserById = async (id) => {
       email,
       role,
       email_verified_at,
+      email_alerts_enabled,
       created_at,
       updated_at
     FROM users
     WHERE id = $1`,
     [id],
+  );
+
+  return result.rows[0];
+};
+
+const updateEmailAlertsEnabled = async (id, enabled) => {
+  const result = await pool.query(
+    `UPDATE users
+    SET
+      email_alerts_enabled = $2
+    WHERE id = $1
+    RETURNING
+      id,
+      username,
+      email,
+      role,
+      email_verified_at,
+      email_alerts_enabled,
+      created_at,
+      updated_at`,
+    [id, enabled],
   );
 
   return result.rows[0];
@@ -113,6 +135,7 @@ const deleteUser = async (id) => {
 
 module.exports = {
   getUsersPage,
+  updateEmailAlertsEnabled,
   getUserById,
   updateUserRole,
   deleteUser,

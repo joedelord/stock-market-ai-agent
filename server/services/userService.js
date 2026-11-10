@@ -8,6 +8,7 @@ const userModel = require("../models/userModel");
 const emailService = require("./emailService");
 const HttpError = require("../utils/httpError");
 const logger = require("../utils/logger");
+const { readUnsubscribeToken } = require("../utils/unsubscribeToken");
 
 const SALT_ROUNDS = 12;
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
@@ -148,14 +149,21 @@ const requestPasswordReset = async (email) => {
 const resetPassword = async (token, newPassword) => {
   const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
 
-  const userId = await passwordResetModel.resetPasswordWithToken(
+  const user = await passwordResetModel.resetPasswordWithToken(
     hashToken(token),
     passwordHash,
   );
 
-  if (!userId) {
+  if (!user) {
     throw new HttpError(400, "Invalid or expired reset token");
   }
+
+  // Someone with access to the inbox can reset the password, so the owner
+  // still hears about it. Not awaited: a failing email must not undo or
+  // delay the reset.
+  emailService.sendPasswordChangedEmail(user.email).catch((error) => {
+    logger.error({ err: error }, "Failed to send password changed email");
+  });
 };
 
 const verifyEmail = async (token) => {
@@ -201,6 +209,27 @@ const deleteOwnAccount = async (userId, password) => {
   return userModel.deleteUser(userId);
 };
 
+const setEmailAlertsEnabled = async (userId, enabled) => {
+  const user = await userModel.updateEmailAlertsEnabled(userId, enabled);
+
+  if (!user) {
+    throw new HttpError(404, "User not found");
+  }
+
+  return user;
+};
+
+// A deleted account gets no emails anyway, so it counts as unsubscribed.
+const unsubscribeFromAlertEmails = async (token) => {
+  const userId = readUnsubscribeToken(token);
+
+  if (!userId) {
+    throw new HttpError(400, "Invalid unsubscribe link");
+  }
+
+  await userModel.updateEmailAlertsEnabled(userId, false);
+};
+
 module.exports = {
   createUserAccount,
   authenticate,
@@ -211,4 +240,6 @@ module.exports = {
   verifyEmail,
   resendEmailVerification,
   deleteOwnAccount,
+  setEmailAlertsEnabled,
+  unsubscribeFromAlertEmails,
 };

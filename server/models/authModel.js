@@ -10,6 +10,7 @@ const findUserByEmail = async (email) => {
       role,
       token_version,
       email_verified_at,
+      email_alerts_enabled,
       created_at,
       updated_at
     FROM users
@@ -61,6 +62,7 @@ const createUser = async ({
       role,
       token_version,
       email_verified_at,
+      email_alerts_enabled,
       created_at,
       updated_at`,
     [username, email, passwordHash, role, emailVerified],
@@ -102,9 +104,15 @@ const findPasswordHashById = async (id) => {
 };
 
 // Bumping the token version logs the user out on every device.
+// Also removes pending reset links, so a link requested before the change
+// cannot set the password again.
 const updatePassword = async (id, passwordHash) => {
   const result = await pool.query(
-    `UPDATE users
+    `WITH removed_reset_tokens AS (
+       DELETE FROM password_reset_tokens
+       WHERE user_id = $2
+     )
+     UPDATE users
      SET
        password_hash = $1,
        token_version = token_version + 1

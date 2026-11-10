@@ -47,6 +47,7 @@ describe("Gmail API email delivery", () => {
     const result = await emailService.sendAlertNotificationEmail(
       "user@example.com",
       "AAPL is at 205.00 USD.",
+      "1.token",
     );
 
     expect(result).toEqual({ id: "message-id", threadId: "thread-id" });
@@ -73,6 +74,14 @@ describe("Gmail API email delivery", () => {
     expect(rawMessage).toContain("From: Stock Market AI <alerts@gmail.com>");
     expect(rawMessage).toContain("To: user@example.com");
     expect(rawMessage).toContain("Subject: Stock Market AI: stock alert triggered");
+
+    // Long headers are folded onto several lines (RFC 5322).
+    const unfolded = rawMessage.replace(/\r\n[ \t]+/g, " ");
+
+    expect(unfolded).toContain(
+      `List-Unsubscribe: <${process.env.CLIENT_ORIGIN}/api/auth/unsubscribe?token=1.token>`,
+    );
+    expect(rawMessage).toContain("List-Unsubscribe-Post: List-Unsubscribe=One-Click");
   });
 
   test("reuses the access token until it expires", async () => {

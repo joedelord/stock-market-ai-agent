@@ -6,6 +6,7 @@ const helmet = require("helmet");
 
 const pool = require("./config/db");
 const requestLogger = require("./middleware/requestLogger");
+const emailService = require("./services/emailService");
 
 const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/users");
@@ -57,6 +58,17 @@ app.get("/api/health", async (req, res) => {
       status: "unavailable",
     });
   }
+});
+
+// Separate from /api/health, so an email outage never fails a deploy's
+// health check. Point an uptime monitor here to hear about a revoked Gmail
+// token or broken SMTP settings.
+app.get("/api/health/email", async (req, res) => {
+  const status = await emailService.checkEmailHealth();
+
+  return res.status(status === "failing" ? 503 : 200).json({
+    status,
+  });
 });
 
 app.use("/api/auth", authRoutes);

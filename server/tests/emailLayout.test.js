@@ -44,5 +44,17 @@ describe("email layout", () => {
 
     expect(html).not.toContain("<a href");
     expect(html).not.toContain("border-left: 4px");
+    expect(html).not.toContain("Unsubscribe");
+  });
+
+  test("adds an unsubscribe link to the footer", () => {
+    const html = renderEmail({
+      preheader: "Preview",
+      heading: "Heading",
+      unsubscribeUrl: "https://example.com/unsubscribe?token=1.abc",
+    });
+
+    expect(html).toContain('href="https://example.com/unsubscribe?token=1.abc"');
+    expect(html).toContain("Unsubscribe from alert emails");
   });
 });
