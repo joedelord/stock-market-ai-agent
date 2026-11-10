@@ -729,7 +729,9 @@ and returns the updated user. `POST /api/auth/unsubscribe` needs no login;
 see [Alert emails](#alert-emails).
 
 Reset links point to `CLIENT_ORIGIN/reset-password?token=...`, expire after
-one hour, and work once.
+one hour, and work once. Changing the password, by reset link or on the
+profile, cancels every pending reset link and emails the owner that the
+password was changed.
 
 Registering sends a verification link to
 `CLIENT_ORIGIN/verify-email?token=...`, which expires after 24 hours and
@@ -847,6 +849,13 @@ server instances. Rate limits are off when `NODE_ENV=test`.
   headers are never logged.
 - **Health check:** `GET /api/health` returns `{"status":"ok"}`, or `503`
   when the database is unreachable.
+- **Email health check:** `GET /api/health/email` returns `ok`,
+  `not_configured` or, with `503`, `failing`. It requests a Gmail access
+  token (or opens an SMTP connection), so it catches a revoked refresh token.
+  The result is reused for 5 minutes. A Gmail access token that was fetched
+  before the refresh token was revoked keeps working for up to an hour, so
+  the check can take that long to notice. In production the server also
+  runs this check at startup and logs the result.
 - **Shutdown:** on `SIGTERM`/`SIGINT` the server finishes open requests,
   closes the database pool and exits (forced after 10 seconds).
 - **Proxy:** in production Express trusts the first reverse proxy
@@ -968,7 +977,10 @@ On a hosting platform that builds from a Dockerfile, create one web
 service and one worker (`npm run market:watch`) from this image, run
 `npm run migrate` as the release or pre-deploy command, and use the
 platform's PostgreSQL with `DATABASE_URL` (and `DB_SSL=true` if required).
-Point the platform's health check at `/api/health`.
+Point the platform's health check at `/api/health`. To hear about broken
+email, point an uptime monitor (for example UptimeRobot) at
+`/api/health/email`. It is kept separate so an email outage never fails a
+deploy.
 
 ### Without Docker
 

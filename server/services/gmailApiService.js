@@ -102,5 +102,6 @@ const sendRawEmail = async (rawMessage) => {
 module.exports = {
   isGmailApiConfigured,
   clearAccessToken,
+  getAccessToken,
   sendRawEmail,
 };

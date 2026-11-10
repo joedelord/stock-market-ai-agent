@@ -18,8 +18,8 @@ const createResetToken = async (userId, tokenHash, expiresAt) => {
 };
 
 // Consumes the token and sets the new password in one transaction. Bumping
-// the token version logs the user out everywhere. Returns null when the token
-// is unknown, used or expired.
+// the token version logs the user out everywhere. Returns the user's id and
+// email, or null when the token is unknown, used or expired.
 const resetPasswordWithToken = async (tokenHash, passwordHash) => {
   const client = await pool.connect();
 
@@ -41,12 +41,15 @@ const resetPasswordWithToken = async (tokenHash, passwordHash) => {
       return null;
     }
 
-    await client.query(
+    const userResult = await client.query(
       `UPDATE users
        SET
          password_hash = $1,
          token_version = token_version + 1
-       WHERE id = $2`,
+       WHERE id = $2
+       RETURNING
+         id,
+         email`,
       [passwordHash, resetToken.user_id],
     );
 
@@ -57,7 +60,7 @@ const resetPasswordWithToken = async (tokenHash, passwordHash) => {
 
     await client.query("COMMIT");
 
-    return resetToken.user_id;
+    return userResult.rows[0];
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;

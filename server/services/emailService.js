@@ -4,6 +4,12 @@ const logger = require("../utils/logger");
 const gmailApiService = require("./gmailApiService");
 const { APP_NAME, renderEmail } = require("./emailLayout");
 
+// A public endpoint asks for this, so the result is reused for a while
+// instead of contacting the provider on every request.
+const HEALTH_CACHE_MS = 5 * 60 * 1000;
+
+let healthCache = null;
+
 // Tests never reach an SMTP server: jsonTransport builds the message without
 // sending it. Without SMTP_HOST, development logs the email instead.
 const createTransporter = () => {
@@ -68,6 +74,40 @@ const sendEmail = async ({ to, subject, text, html, headers }) => {
   }
 
   return transporter.sendMail(message);
+};
+
+// Contacts the provider with the configured credentials: a Gmail token
+// request (which also catches a revoked refresh token) or an SMTP handshake.
+// Returns "ok", "failing" or "not_configured".
+const checkEmailHealth = async () => {
+  if (healthCache && healthCache.expiresAt > Date.now()) {
+    return healthCache.status;
+  }
+
+  let status;
+
+  try {
+    if (gmailApiService.isGmailApiConfigured()) {
+      await gmailApiService.getAccessToken();
+      status = "ok";
+    } else if (transporter && process.env.NODE_ENV !== "test") {
+      await transporter.verify();
+      status = "ok";
+    } else {
+      status = "not_configured";
+    }
+  } catch (error) {
+    logger.error({ err: error }, "Email delivery is not working");
+    status = "failing";
+  }
+
+  healthCache = { status, expiresAt: Date.now() + HEALTH_CACHE_MS };
+
+  return status;
+};
+
+const clearEmailHealthCache = () => {
+  healthCache = null;
 };
 
 const sendEmailVerificationEmail = async (email, verifyUrl) => {
@@ -168,6 +208,8 @@ const sendAlertNotificationEmail = async (email, message, unsubscribeToken) => {
 };
 
 module.exports = {
+  checkEmailHealth,
+  clearEmailHealthCache,
   sendEmail,
   sendEmailVerificationEmail,
   sendPasswordResetEmail,

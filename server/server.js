@@ -3,12 +3,23 @@ require("./config/env");
 const app = require("./app");
 const pool = require("./config/db");
 const logger = require("./utils/logger");
+const emailService = require("./services/emailService");
 
 const PORT = process.env.PORT || 5000;
 const SHUTDOWN_TIMEOUT_MS = 10000;
 
 const server = app.listen(PORT, () => {
   logger.info(`Server running at http://localhost:${PORT}`);
+
+  // Broken email credentials show up in the deploy logs right away, not
+  // only when the first email fails. checkEmailHealth logs the details.
+  if (process.env.NODE_ENV === "production") {
+    emailService.checkEmailHealth().then((status) => {
+      if (status === "ok") {
+        logger.info("Email delivery is working");
+      }
+    });
+  }
 });
 
 // Stops accepting connections, lets in-flight requests finish, then closes

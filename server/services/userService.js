@@ -149,14 +149,21 @@ const requestPasswordReset = async (email) => {
 const resetPassword = async (token, newPassword) => {
   const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
 
-  const userId = await passwordResetModel.resetPasswordWithToken(
+  const user = await passwordResetModel.resetPasswordWithToken(
     hashToken(token),
     passwordHash,
   );
 
-  if (!userId) {
+  if (!user) {
     throw new HttpError(400, "Invalid or expired reset token");
   }
+
+  // Someone with access to the inbox can reset the password, so the owner
+  // still hears about it. Not awaited: a failing email must not undo or
+  // delay the reset.
+  emailService.sendPasswordChangedEmail(user.email).catch((error) => {
+    logger.error({ err: error }, "Failed to send password changed email");
+  });
 };
 
 const verifyEmail = async (token) => {
