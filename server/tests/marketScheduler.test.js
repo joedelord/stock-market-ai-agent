@@ -5,6 +5,7 @@ const {
   createMarketScheduler,
 } = require("../jobs/marketScheduler");
 const { MARKET_CALENDAR } = require("../config/marketCalendar");
+const alertService = require("../services/alertService");
 const { useUsExchangesOnly } = require("./helpers/exchanges");
 
 const [NEW_YORK, HELSINKI] = MARKET_HOURS;
@@ -128,6 +129,44 @@ describe("getOpenExchanges with only US exchanges enabled", () => {
 });
 
 describe("Market Scheduler", () => {
+  let retryAlertEmails;
+
+  beforeEach(() => {
+    retryAlertEmails = vi
+      .spyOn(alertService, "retryAlertEmails")
+      .mockResolvedValue({ sent: 0, failed: 0, cancelled: 0, rateLimited: false });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  test("retries alert emails after each update, even a failed one", async () => {
+    const updatePrices = vi.fn()
+      .mockRejectedValueOnce(new Error("Database unavailable"))
+      .mockResolvedValueOnce([]);
+    const scheduler = createMarketScheduler({
+      updatePrices,
+      getExchanges: () => ["XNAS"],
+    });
+
+    await scheduler.run();
+    await scheduler.run();
+    expect(retryAlertEmails).toHaveBeenCalledTimes(2);
+    await scheduler.stop();
+  });
+
+  test("keeps running after a failed email retry", async () => {
+    retryAlertEmails.mockRejectedValueOnce(new Error("Database unavailable"));
+    const scheduler = createMarketScheduler({
+      updatePrices: vi.fn().mockResolvedValue([]),
+      getExchanges: () => ["XNAS"],
+    });
+
+    await expect(scheduler.run()).resolves.toBeUndefined();
+    await scheduler.stop();
+  });
+
   test("passes open exchanges and abort signal to updater", async () => {
     const updatePrices = vi.fn().mockResolvedValue([]);
     const scheduler = createMarketScheduler({

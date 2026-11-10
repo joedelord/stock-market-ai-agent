@@ -8,6 +8,7 @@ const userModel = require("../models/userModel");
 const emailService = require("./emailService");
 const HttpError = require("../utils/httpError");
 const logger = require("../utils/logger");
+const { readUnsubscribeToken } = require("../utils/unsubscribeToken");
 
 const SALT_ROUNDS = 12;
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
@@ -201,6 +202,27 @@ const deleteOwnAccount = async (userId, password) => {
   return userModel.deleteUser(userId);
 };
 
+const setEmailAlertsEnabled = async (userId, enabled) => {
+  const user = await userModel.updateEmailAlertsEnabled(userId, enabled);
+
+  if (!user) {
+    throw new HttpError(404, "User not found");
+  }
+
+  return user;
+};
+
+// A deleted account gets no emails anyway, so it counts as unsubscribed.
+const unsubscribeFromAlertEmails = async (token) => {
+  const userId = readUnsubscribeToken(token);
+
+  if (!userId) {
+    throw new HttpError(400, "Invalid unsubscribe link");
+  }
+
+  await userModel.updateEmailAlertsEnabled(userId, false);
+};
+
 module.exports = {
   createUserAccount,
   authenticate,
@@ -211,4 +233,6 @@ module.exports = {
   verifyEmail,
   resendEmailVerification,
   deleteOwnAccount,
+  setEmailAlertsEnabled,
+  unsubscribeFromAlertEmails,
 };

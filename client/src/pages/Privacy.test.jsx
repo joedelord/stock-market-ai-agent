@@ -29,3 +29,21 @@ test("explains the stored data and links to account deletion", () => {
     "/account",
   );
 });
+
+test("explains how to turn alert emails off and who delivers them", () => {
+  useAuth.mockReturnValue({ isAuthenticated: false, isLoading: false });
+
+  render(
+    <MemoryRouter>
+      <Privacy />
+    </MemoryRouter>,
+  );
+
+  expect(screen.getByRole("heading", { name: "Emails" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "profile" })).toHaveAttribute(
+    "href",
+    "/account",
+  );
+  expect(screen.getByText(/unsubscribe link/)).toBeInTheDocument();
+  expect(screen.getByText("Google (Gmail)")).toBeInTheDocument();
+});

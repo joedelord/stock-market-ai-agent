@@ -212,7 +212,8 @@ const triggerAlerts = async (
       return [];
     }
 
-    // The CTE joins the inserted rows to users, so the caller can email them.
+    // Only verified addresses get email, so nobody can sign a stranger up
+    // for alerts. Users who turned alert emails off get none either.
     const result = await client.query(
       `WITH inserted AS (
         INSERT INTO notifications (
@@ -222,7 +223,8 @@ const triggerAlerts = async (
           price,
           daily_change_percent,
           price_time,
-          market_date
+          market_date,
+          email_status
         )
         SELECT
           notification.user_id,
@@ -231,7 +233,13 @@ const triggerAlerts = async (
           $4,
           notification.daily_change_percent,
           $5,
-          $6
+          $6,
+          CASE
+            WHEN users.email_verified_at IS NOT NULL
+              AND users.email_alerts_enabled
+            THEN 'pending'
+            ELSE 'none'
+          END
         FROM UNNEST(
           $1::int[],
           $2::bigint[],
@@ -243,22 +251,22 @@ const triggerAlerts = async (
           message,
           daily_change_percent
         )
+        JOIN users ON users.id = notification.user_id
         RETURNING
           id,
           user_id,
           alert_id,
-          message
+          message,
+          email_status
       )
       SELECT
-        inserted.id,
-        inserted.user_id,
-        inserted.alert_id,
-        inserted.message,
-        users.email,
-        users.email_verified_at
+        id,
+        user_id,
+        alert_id,
+        message,
+        email_status
       FROM inserted
-      JOIN users ON users.id = inserted.user_id
-      ORDER BY inserted.id`,
+      ORDER BY id`,
       [
         alerts.map((alert) => alert.user_id),
         alerts.map((alert) => alert.id),

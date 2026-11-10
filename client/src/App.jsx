@@ -16,6 +16,7 @@ import NotFound from "./pages/NotFound";
 import Privacy from "./pages/Privacy";
 import Register from "./pages/Register";
 import ResetPassword from "./pages/ResetPassword";
+import Unsubscribe from "./pages/Unsubscribe";
 import VerifyEmail from "./pages/VerifyEmail";
 
 import StockDashboard from "./pages/StockDashboard";
@@ -38,6 +39,8 @@ function App() {
         <Route path="/verify-email" element={<VerifyEmail />} />
 
         <Route path="/privacy" element={<Privacy />} />
+
+        <Route path="/unsubscribe" element={<Unsubscribe />} />
 
         <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<Navigate to="/stocks" replace />} />

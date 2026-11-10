@@ -1,5 +1,7 @@
 const { z } = require("zod");
 
+const { UNSUBSCRIBE_TOKEN_PATTERN } = require("../utils/unsubscribeToken");
+
 const emailField = z.email("Invalid email address").trim().toLowerCase();
 
 const newPasswordField = z
@@ -65,6 +67,22 @@ const deleteAccountSchema = z.object({
   }),
 });
 
+const emailPreferencesSchema = z.object({
+  body: z.object({
+    emailAlertsEnabled: z.boolean("emailAlertsEnabled must be true or false"),
+  }),
+});
+
+// The token is in the query string, because email providers' one-click
+// unsubscribe POSTs to the URL in the List-Unsubscribe header as it is.
+const unsubscribeSchema = z.object({
+  query: z.object({
+    token: z
+      .string("Invalid unsubscribe link")
+      .regex(UNSUBSCRIBE_TOKEN_PATTERN, "Invalid unsubscribe link"),
+  }),
+});
+
 module.exports = {
   registerSchema,
   loginSchema,
@@ -73,4 +91,6 @@ module.exports = {
   resetPasswordSchema,
   verifyEmailSchema,
   deleteAccountSchema,
+  emailPreferencesSchema,
+  unsubscribeSchema,
 };

@@ -40,13 +40,14 @@ const messageBuilder = nodemailer.createTransport({
   buffer: true,
 });
 
-const sendEmail = async ({ to, subject, text, html }) => {
+const sendEmail = async ({ to, subject, text, html, headers }) => {
   const message = {
     from: process.env.MAIL_FROM,
     to,
     subject,
     text,
     html,
+    headers,
   };
 
   // Railway's Trial and Hobby plans block outgoing SMTP, but HTTPS works.
@@ -134,20 +135,35 @@ const sendPasswordChangedEmail = async (email) => {
   });
 };
 
-const sendAlertNotificationEmail = async (email, message) => {
+const sendAlertNotificationEmail = async (email, message, unsubscribeToken) => {
   const alertsUrl = `${process.env.CLIENT_ORIGIN}/alerts`;
+  const token = encodeURIComponent(unsubscribeToken);
+  // The page asks for confirmation, because link scanners open every link.
+  const unsubscribePageUrl = `${process.env.CLIENT_ORIGIN}/unsubscribe?token=${token}`;
+  // Gmail and other providers POST here from their own "Unsubscribe" button
+  // (RFC 8058). The server serves the client, so CLIENT_ORIGIN reaches /api.
+  const unsubscribeApiUrl = `${process.env.CLIENT_ORIGIN}/api/auth/unsubscribe?token=${token}`;
 
   return sendEmail({
     to: email,
     subject: `${APP_NAME}: stock alert triggered`,
-    text: `${message}\n\nManage your alerts: ${alertsUrl}`,
+    text: [
+      message,
+      `Manage your alerts: ${alertsUrl}`,
+      `Unsubscribe from alert emails: ${unsubscribePageUrl}`,
+    ].join("\n\n"),
     html: renderEmail({
       preheader: message,
       heading: "Stock alert triggered",
       highlight: message,
       paragraphs: ["One of your price alerts was just triggered."],
       button: { label: "Manage your alerts", url: alertsUrl },
+      unsubscribeUrl: unsubscribePageUrl,
     }),
+    headers: {
+      "List-Unsubscribe": `<${unsubscribeApiUrl}>`,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    },
   });
 };
 

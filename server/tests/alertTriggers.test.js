@@ -1,12 +1,16 @@
 const pool = require("../config/db");
 const alertModel = require("../models/alertModel");
 const stockModel = require("../models/stockModel");
+const userModel = require("../models/userModel");
 const emailService = require("../services/emailService");
 const {
+  MAX_EMAIL_ATTEMPTS,
   buildAlertMessage,
   checkStockAlerts,
+  retryAlertEmails,
 } = require("../services/alertService");
 const { createUserAccount } = require("../services/userService");
+const { readUnsubscribeToken } = require("../utils/unsubscribeToken");
 const { clearDatabase } = require("./helpers/database");
 
 let user;
@@ -71,6 +75,27 @@ const getNotifications = async () => {
   return result.rows;
 };
 
+const getEmailStates = async () => {
+  const result = await pool.query(
+    `SELECT
+      email_status,
+      email_attempts
+    FROM notifications
+    ORDER BY id`,
+  );
+
+  return result.rows;
+};
+
+// Moves the last attempts back past the retry delay.
+const makeRetriesDue = () =>
+  pool.query(
+    `UPDATE notifications
+    SET
+      email_last_attempt_at = email_last_attempt_at - INTERVAL '1 hour'
+    WHERE email_last_attempt_at IS NOT NULL`,
+  );
+
 beforeEach(async () => {
   await clearDatabase();
 
@@ -120,7 +145,28 @@ describe("Alert triggers", () => {
     expect(sendAlertEmail).toHaveBeenCalledWith(
       "alice@example.com",
       "AAPL (XNAS) is at 105.00 USD, at or above your alert of 100 USD.",
+      expect.any(String),
     );
+
+    const [, , unsubscribeToken] = sendAlertEmail.mock.calls[0];
+
+    expect(readUnsubscribeToken(unsubscribeToken)).toBe(user.id);
+    expect(await getEmailStates()).toEqual([
+      { email_status: "sent", email_attempts: 1 },
+    ]);
+  });
+
+  test("does not email a user who turned alert emails off", async () => {
+    await userModel.updateEmailAlertsEnabled(user.id, false);
+    await createAlert();
+
+    await saveBar(stock, BAR_TIME, "105");
+
+    expect(await checkStockAlerts(stock)).toHaveLength(1);
+    expect(sendAlertEmail).not.toHaveBeenCalled();
+    expect(await getEmailStates()).toEqual([
+      { email_status: "none", email_attempts: 0 },
+    ]);
   });
 
   test("does not email a user whose address is not verified", async () => {
@@ -152,6 +198,129 @@ describe("Alert triggers", () => {
 
     expect(await checkStockAlerts(stock)).toHaveLength(1);
     expect(await getNotifications()).toHaveLength(1);
+    expect(await getEmailStates()).toEqual([
+      { email_status: "pending", email_attempts: 1 },
+    ]);
+  });
+
+  test("retries a failed email after the retry delay", async () => {
+    await createAlert();
+    sendAlertEmail.mockRejectedValueOnce(new Error("SMTP down"));
+
+    await saveBar(stock, BAR_TIME, "105");
+    await checkStockAlerts(stock);
+
+    // Too soon: the failed email waits for the retry delay.
+    expect(await retryAlertEmails()).toMatchObject({ sent: 0, failed: 0 });
+
+    await makeRetriesDue();
+
+    expect(await retryAlertEmails()).toMatchObject({ sent: 1, failed: 0 });
+    expect(sendAlertEmail).toHaveBeenCalledTimes(2);
+    expect(await getEmailStates()).toEqual([
+      { email_status: "sent", email_attempts: 2 },
+    ]);
+  });
+
+  test("gives up on an email after the last attempt", async () => {
+    await createAlert();
+    sendAlertEmail.mockRejectedValue(new Error("SMTP down"));
+
+    await saveBar(stock, BAR_TIME, "105");
+    await checkStockAlerts(stock);
+
+    for (let attempt = 2; attempt <= MAX_EMAIL_ATTEMPTS; attempt += 1) {
+      await makeRetriesDue();
+      await retryAlertEmails();
+    }
+
+    expect(await getEmailStates()).toEqual([
+      { email_status: "failed", email_attempts: MAX_EMAIL_ATTEMPTS },
+    ]);
+
+    await makeRetriesDue();
+    await retryAlertEmails();
+
+    expect(sendAlertEmail).toHaveBeenCalledTimes(MAX_EMAIL_ATTEMPTS);
+  });
+
+  test("stops sending at a rate limit and sends the rest later", async () => {
+    const bob = await createUserAccount({
+      username: "bob",
+      email: "bob@example.com",
+      password: "password123",
+      role: "user",
+      emailVerified: true,
+    });
+
+    await createAlert();
+    await alertModel.createAlert(bob.id, {
+      stockId: stock.id,
+      alertType: "price_above",
+      threshold: 100,
+      repeatMode: "once",
+    });
+
+    sendAlertEmail.mockRejectedValueOnce(
+      Object.assign(new Error("Too many requests"), { status: 429 }),
+    );
+
+    await saveBar(stock, BAR_TIME, "105");
+    await checkStockAlerts(stock);
+
+    // Bob's email was not even tried after the rate limit.
+    expect(sendAlertEmail).toHaveBeenCalledTimes(1);
+    expect(await getEmailStates()).toEqual([
+      { email_status: "pending", email_attempts: 1 },
+      { email_status: "pending", email_attempts: 0 },
+    ]);
+
+    await makeRetriesDue();
+
+    expect(await retryAlertEmails()).toMatchObject({ sent: 2 });
+    expect(await getEmailStates()).toEqual([
+      { email_status: "sent", email_attempts: 2 },
+      { email_status: "sent", email_attempts: 1 },
+    ]);
+  });
+
+  test("does not retry for a user who turned alert emails off", async () => {
+    await createAlert();
+    sendAlertEmail.mockRejectedValueOnce(new Error("SMTP down"));
+
+    await saveBar(stock, BAR_TIME, "105");
+    await checkStockAlerts(stock);
+
+    await userModel.updateEmailAlertsEnabled(user.id, false);
+    await makeRetriesDue();
+
+    expect(await retryAlertEmails()).toMatchObject({ sent: 0, cancelled: 1 });
+    expect(sendAlertEmail).toHaveBeenCalledTimes(1);
+    expect(await getEmailStates()).toEqual([
+      { email_status: "none", email_attempts: 2 },
+    ]);
+  });
+
+  test("gives up on emails older than a day", async () => {
+    await createAlert();
+    sendAlertEmail.mockRejectedValueOnce(new Error("SMTP down"));
+
+    await saveBar(stock, BAR_TIME, "105");
+    await checkStockAlerts(stock);
+
+    await pool.query(
+      `UPDATE notifications
+      SET
+        created_at = NOW() - INTERVAL '25 hours',
+        email_last_attempt_at = NOW() - INTERVAL '25 hours'`,
+    );
+
+    await retryAlertEmails();
+
+    expect(sendAlertEmail).toHaveBeenCalledTimes(1);
+    expect(await getEmailStates()).toEqual([
+      { email_status: "failed", email_attempts: 1 },
+    ]);
   });
 
   test("fires a price_above alert once and switches it off", async () => {

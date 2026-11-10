@@ -32,9 +32,14 @@ const readErrorDetail = async (response) => {
 
 const requestFailedError = async (action, response) => {
   const detail = await readErrorDetail(response);
-  return new Error(
+  const error = new Error(
     `Gmail ${action} failed with HTTP ${response.status}${detail ? `: ${detail}` : ""}`,
   );
+
+  // Lets the caller tell a rate limit (429) from a broken message.
+  error.status = response.status;
+
+  return error;
 };
 
 const getAccessToken = async () => {

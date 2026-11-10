@@ -54,12 +54,14 @@ function Privacy() {
             <ul className="list-disc space-y-2 pl-5">
               <li>
                 <strong>Account:</strong> username, email address, a hashed
-                password (never the password itself), your role, and whether
-                your email address is verified.
+                password (never the password itself), your role, whether
+                your email address is verified, and whether you get alert
+                emails.
               </li>
               <li>
                 <strong>Your activity:</strong> the stocks on your watchlist,
-                your price alerts and the notifications they create.
+                your price alerts and the notifications they create, including
+                whether each alert email was sent.
               </li>
               <li>
                 <strong>Security data:</strong> IP addresses and email
@@ -73,6 +75,23 @@ function Privacy() {
             </ul>
             <p>
               AI analyses are stored per stock and are not linked to you.
+            </p>
+          </Section>
+
+          <Section title="Emails">
+            <p>
+              Address verification and password reset emails are sent when
+              you ask for them. Alert emails are sent only to a verified
+              address, each time one of your alerts is triggered.
+            </p>
+            <p>
+              You can turn alert emails off on your{" "}
+              <Link to="/account" className="text-blue-700 underline">
+                profile
+              </Link>{" "}
+              or with the unsubscribe link at the bottom of any alert email.
+              Your alerts keep working and still show up in the app. There
+              are no newsletters or marketing emails.
             </p>
           </Section>
 
@@ -100,8 +119,9 @@ function Privacy() {
                 news. It receives stock symbols only.
               </li>
               <li>
-                <strong>An email provider</strong> delivers emails. It receives
-                your email address and the message.
+                <strong>Google (Gmail)</strong> delivers the emails. It
+                receives your email address and the message, and handles them
+                under Google&apos;s own privacy policy.
               </li>
             </ul>
           </Section>

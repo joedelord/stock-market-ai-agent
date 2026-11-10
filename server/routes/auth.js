@@ -11,6 +11,8 @@ const {
   verifyEmail,
   resendVerification,
   deleteAccount,
+  updateEmailPreferences,
+  unsubscribe,
 } = require("../controllers/authController");
 
 const { requireAuth } = require("../middleware/authMiddleware");
@@ -37,6 +39,8 @@ const {
   resetPasswordSchema,
   verifyEmailSchema,
   deleteAccountSchema,
+  emailPreferencesSchema,
+  unsubscribeSchema,
 } = require("../validations/authSchemas");
 
 const router = express.Router();
@@ -62,6 +66,17 @@ router.delete(
   validate(deleteAccountSchema),
   deleteAccount,
 );
+
+router.patch(
+  "/me/email-preferences",
+  requireAuth,
+  validate(emailPreferencesSchema),
+  updateEmailPreferences,
+);
+
+// No rate limit: Gmail's one-click requests all come from Google's servers,
+// and a forged token cannot be guessed.
+router.post("/unsubscribe", validate(unsubscribeSchema), unsubscribe);
 
 router.patch(
   "/password",

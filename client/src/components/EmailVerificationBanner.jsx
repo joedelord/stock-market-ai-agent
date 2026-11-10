@@ -29,7 +29,7 @@ export default function EmailVerificationBanner() {
   return (
     <section aria-label="Email verification" className="border-b border-amber-300 bg-amber-50 text-amber-950">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 text-sm sm:px-8">
-        <p>Confirm your email address to get stock alerts by email. Check your inbox for the link.</p>
+        <p>Confirm your email address to get stock alerts by email. Check your inbox for the link, and your spam folder if it is not there.</p>
         <button type="button" disabled={busy} onClick={handleResend} className="font-semibold text-amber-900 underline disabled:opacity-60">
           {busy ? "Sending…" : "Resend email"}
         </button>

@@ -271,7 +271,9 @@ that nothing in the app is investment advice. The footer and the
 registration form link to it. To show a contact address on it, set
 `VITE_CONTACT_EMAIL` when building the client (for Docker:
 `docker build --build-arg VITE_CONTACT_EMAIL=privacy@yourdomain.com .`).
-Update the page if you add services that receive user data.
+Update the page if you add services that receive user data. It names Google
+(Gmail) as the email provider, so change that line if you send through
+another provider.
 
 On `/stocks` the user picks the stocks on their watchlist. The list shows
 each stock's latest price and day change. The chart shows the selected
@@ -558,6 +560,29 @@ only when the quote is from the same market day in the exchange's local
 time zone. Triggering an alert and creating its notification happen in one
 transaction, so concurrent runs cannot notify twice.
 
+### Alert emails
+
+A triggered alert emails its owner when the address is verified and alert
+emails are on. Emails go out one at a time, so a burst of alerts does not hit
+the provider's rate limit, and a run stops at the first rate limit (HTTP 429
+from the Gmail API, SMTP 421 or 452). Each notification records its email
+status (`none`, `pending`, `sent` or `failed`):
+
+- A failed email stays `pending` and the scheduler retries it after each
+  price update, at least 10 minutes after the last attempt.
+- It becomes `failed` after 5 attempts, or when it is a day old.
+- A run sends at most 100 emails, well under Gmail's daily limit of about
+  500 for a personal account.
+- An email still pending when the user turns alert emails off is dropped.
+
+Users turn alert emails on or off in their profile. Each alert email has an
+unsubscribe link in its footer (`CLIENT_ORIGIN/unsubscribe?token=...`, which
+asks for confirmation because link scanners open every link) and
+`List-Unsubscribe` headers, so Gmail shows its own one-click unsubscribe
+button. The token is an HMAC of the user id signed with `JWT_SECRET`. It
+does not expire, cannot be used to log in, and can only turn alert emails
+off. Changing `JWT_SECRET` invalidates the links in earlier emails.
+
 ### Notifications
 
 | Method | Endpoint                 | Description                             |
@@ -691,11 +716,17 @@ session on every device.
 | POST   | `/api/auth/reset-password`      | Set a new password by token  |
 | POST   | `/api/auth/verify-email`        | Verify the email by token    |
 | POST   | `/api/auth/resend-verification` | Send a new verification link |
+| PATCH  | `/api/auth/me/email-preferences` | Turn alert emails on or off |
+| POST   | `/api/auth/unsubscribe?token=`   | Turn alert emails off by link |
 
 Deleting the own account needs the current password in the body
 (`{ "password": "..." }`). It removes the user's watchlist, alerts,
 notifications and tokens, ends every session, and refuses to delete the
 last admin.
+
+`PATCH /api/auth/me/email-preferences` takes `{ "emailAlertsEnabled": false }`
+and returns the updated user. `POST /api/auth/unsubscribe` needs no login;
+see [Alert emails](#alert-emails).
 
 Reset links point to `CLIENT_ORIGIN/reset-password?token=...`, expire after
 one hour, and work once.

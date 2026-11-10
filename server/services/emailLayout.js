@@ -58,6 +58,7 @@ const renderEmail = ({
   highlight,
   button,
   footnote,
+  unsubscribeUrl,
 }) => `<!doctype html>
 <html lang="en">
   <head>
@@ -89,6 +90,7 @@ const renderEmail = ({
             <tr>
               <td align="center" style="padding: 16px 4px 0; font-size: 12px; line-height: 18px; color: ${COLORS.muted};">
                 You received this email because you have an account at ${APP_NAME}.
+                ${unsubscribeUrl ? `<br><a href="${escapeHtml(unsubscribeUrl)}" style="color: ${COLORS.muted}; text-decoration: underline;">Unsubscribe from alert emails</a>` : ""}
               </td>
             </tr>
           </table>

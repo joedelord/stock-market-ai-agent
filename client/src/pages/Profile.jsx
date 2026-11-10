@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 import AccountPage from "../components/AccountPage";
 import DeleteAccountSection from "../components/DeleteAccountSection";
+import EmailPreferencesSection from "../components/EmailPreferencesSection";
 import { useAuth } from "../context/useAuth";
 
 const ROLE_LABELS = { user: "Member", moderator: "Moderator", admin: "Administrator" };
@@ -28,6 +29,7 @@ export default function Profile() {
         <p className="mt-2 text-sm leading-relaxed text-gray-600">Update your password using your current password. Changing it also signs out your other devices.</p>
         <Link to="/account/password" className="account-primary-link mt-5">Change password <span aria-hidden="true">→</span></Link>
       </section>
+      <EmailPreferencesSection />
       <section className="account-card" aria-labelledby="workspace-title">
         <h2 id="workspace-title" className="text-lg font-bold">Your market workspace</h2>
         <div className="account-shortcuts">
