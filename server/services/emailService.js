@@ -1,8 +1,8 @@
 const nodemailer = require("nodemailer");
 
 const logger = require("../utils/logger");
-
-const APP_NAME = "Stock Market AI";
+const gmailApiService = require("./gmailApiService");
+const { APP_NAME, renderEmail } = require("./emailLayout");
 
 // Tests never reach an SMTP server: jsonTransport builds the message without
 // sending it. Without SMTP_HOST, development logs the email instead.
@@ -34,31 +34,39 @@ const createTransporter = () => {
 
 const transporter = createTransporter();
 
-const escapeHtml = (value) =>
-  String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+// Builds the MIME message without sending it, for the Gmail API.
+const messageBuilder = nodemailer.createTransport({
+  streamTransport: true,
+  buffer: true,
+});
 
 const sendEmail = async ({ to, subject, text, html }) => {
+  const message = {
+    from: process.env.MAIL_FROM,
+    to,
+    subject,
+    text,
+    html,
+  };
+
+  // Railway's Trial and Hobby plans block outgoing SMTP, but HTTPS works.
+  if (gmailApiService.isGmailApiConfigured()) {
+    const { message: rawMessage } = await messageBuilder.sendMail(message);
+    return gmailApiService.sendRawEmail(rawMessage);
+  }
+
   if (!transporter) {
     if (process.env.NODE_ENV === "production") {
-      throw new Error("No email provider is configured (SMTP_HOST is missing)");
+      throw new Error(
+        "No email provider is configured (set SMTP_HOST or the GMAIL_* variables)",
+      );
     }
 
     logger.info({ to, subject, text }, "Email not sent, SMTP_HOST is not set");
     return undefined;
   }
 
-  return transporter.sendMail({
-    from: process.env.MAIL_FROM,
-    to,
-    subject,
-    text,
-    html,
-  });
+  return transporter.sendMail(message);
 };
 
 const sendEmailVerificationEmail = async (email, verifyUrl) => {
@@ -70,11 +78,14 @@ const sendEmailVerificationEmail = async (email, verifyUrl) => {
       `Confirm your email address to get stock alerts by email: ${verifyUrl}`,
       "The link expires in 24 hours. If you did not create an account, you can ignore this email.",
     ].join("\n\n"),
-    html: `
-      <p>Welcome to ${APP_NAME}!</p>
-      <p><a href="${escapeHtml(verifyUrl)}">Confirm your email address</a> to get stock alerts by email.</p>
-      <p>The link expires in 24 hours. If you did not create an account, you can ignore this email.</p>
-    `,
+    html: renderEmail({
+      preheader: "Confirm your email address to get stock alerts by email.",
+      heading: `Welcome to ${APP_NAME}!`,
+      paragraphs: ["Confirm your email address to get stock alerts by email."],
+      button: { label: "Confirm email address", url: verifyUrl },
+      footnote:
+        "The link expires in 24 hours. If you did not create an account, you can ignore this email.",
+    }),
   });
 };
 
@@ -87,11 +98,16 @@ const sendPasswordResetEmail = async (email, resetUrl) => {
       `Open this link to choose a new one: ${resetUrl}`,
       "The link expires in one hour. If you did not ask for this, you can ignore this email.",
     ].join("\n\n"),
-    html: `
-      <p>We received a request to reset your password.</p>
-      <p><a href="${escapeHtml(resetUrl)}">Choose a new password</a></p>
-      <p>The link expires in one hour. If you did not ask for this, you can ignore this email.</p>
-    `,
+    html: renderEmail({
+      preheader: "Choose a new password for your account.",
+      heading: "Reset your password",
+      paragraphs: [
+        "We received a request to reset your password. Use the button below to choose a new one.",
+      ],
+      button: { label: "Choose a new password", url: resetUrl },
+      footnote:
+        "The link expires in one hour. If you did not ask for this, you can ignore this email.",
+    }),
   });
 };
 
@@ -105,10 +121,16 @@ const sendPasswordChangedEmail = async (email) => {
       "The password of your account was just changed and you were logged out on other devices.",
       `If this was not you, reset your password right away: ${forgotPasswordUrl}`,
     ].join("\n\n"),
-    html: `
-      <p>The password of your account was just changed and you were logged out on other devices.</p>
-      <p>If this was not you, <a href="${escapeHtml(forgotPasswordUrl)}">reset your password</a> right away.</p>
-    `,
+    html: renderEmail({
+      preheader: "The password of your account was just changed.",
+      heading: "Your password was changed",
+      paragraphs: [
+        "The password of your account was just changed and you were logged out on other devices.",
+        "If this was not you, reset your password right away.",
+      ],
+      button: { label: "Reset password", url: forgotPasswordUrl },
+      footnote: "If you made this change, you do not need to do anything.",
+    }),
   });
 };
 
@@ -119,11 +141,13 @@ const sendAlertNotificationEmail = async (email, message) => {
     to: email,
     subject: `${APP_NAME}: stock alert triggered`,
     text: `${message}\n\nManage your alerts: ${alertsUrl}`,
-    html: `
-      <h1>Stock alert</h1>
-      <p>${escapeHtml(message)}</p>
-      <p><a href="${escapeHtml(alertsUrl)}">Manage your alerts</a></p>
-    `,
+    html: renderEmail({
+      preheader: message,
+      heading: "Stock alert triggered",
+      highlight: message,
+      paragraphs: ["One of your price alerts was just triggered."],
+      button: { label: "Manage your alerts", url: alertsUrl },
+    }),
   });
 };
 
