@@ -61,7 +61,8 @@ function Privacy() {
               <li>
                 <strong>Your activity:</strong> the stocks on your watchlist,
                 your price alerts and the notifications they create, including
-                whether each alert email was sent.
+                whether each alert email was sent. Notifications are deleted
+                after 90 days.
               </li>
               <li>
                 <strong>Security data:</strong> IP addresses and email

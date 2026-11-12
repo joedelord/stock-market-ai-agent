@@ -337,6 +337,16 @@ const getTrackedStocks = async () => {
   return result.rows;
 };
 
+const deleteOldStockPrices = async (maxAgeMs) => {
+  const result = await pool.query(
+    `DELETE FROM stock_prices
+    WHERE price_time <= NOW() - $1 * INTERVAL '1 millisecond'`,
+    [maxAgeMs],
+  );
+
+  return result.rowCount;
+};
+
 module.exports = {
   getAllStocks,
   getTrackedStocks,
@@ -350,4 +360,5 @@ module.exports = {
   saveStockPrices,
   saveStockQuote,
   getStockQuote,
+  deleteOldStockPrices,
 };
