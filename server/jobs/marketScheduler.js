@@ -3,11 +3,14 @@ const cron = require("node-cron");
 const logger = require("../utils/logger");
 const alertService = require("../services/alertService");
 const { updateStockPrices } = require("./updateStockPrices");
+const { cleanupOldData } = require("./cleanupData");
 const { MARKET_CALENDAR } = require("../config/marketCalendar");
 const { getEnabledExchanges } = require("../config/exchangeMapping");
 
 // Every 15 minutes on weekdays (UTC); market-specific local hours are below.
 const CRON_EXPRESSION = "*/15 * * * 1-5";
+// Daily at 03:00 UTC, when neither New York nor Helsinki is trading.
+const CLEANUP_CRON_EXPRESSION = "0 3 * * *";
 
 // The close is the actual market close; a final-candle buffer is added below.
 const MARKET_HOURS = [
@@ -104,9 +107,11 @@ const isMarketOpen = (
 const createMarketScheduler = ({
   updatePrices = updateStockPrices,
   getExchanges = getOpenExchanges,
+  cleanup = cleanupOldData,
 } = {}) => {
   const stopController = new AbortController();
   let currentRun = null;
+  let currentCleanup = null;
 
   const updateAndLog = async (exchanges) => {
     try {
@@ -182,22 +187,50 @@ const createMarketScheduler = ({
     return currentRun;
   };
 
+  const cleanupAndLog = async () => {
+    try {
+      const deleted = await cleanup();
+
+      logger.info({ deleted }, "Old data cleaned up");
+    } catch (error) {
+      logger.error({ err: error }, "Data cleanup failed");
+    }
+  };
+
+  // Runs alongside price updates: it deletes only rows they never read.
+  const runCleanup = () => {
+    if (stopController.signal.aborted || currentCleanup) return null;
+
+    currentCleanup = cleanupAndLog().finally(() => {
+      currentCleanup = null;
+    });
+    return currentCleanup;
+  };
+
   const task = cron.createTask(CRON_EXPRESSION, run, { timezone: "UTC" });
+  const cleanupTask = cron.createTask(CLEANUP_CRON_EXPRESSION, runCleanup, {
+    timezone: "UTC",
+  });
 
   const start = async () => {
     task.start();
-    logger.info({ schedule: CRON_EXPRESSION }, "Market scheduler started");
+    cleanupTask.start();
+    logger.info(
+      { schedule: CRON_EXPRESSION, cleanupSchedule: CLEANUP_CRON_EXPRESSION },
+      "Market scheduler started",
+    );
     await run();
   };
 
   const stop = async () => {
     task.stop();
+    cleanupTask.stop();
     stopController.abort();
-    await currentRun;
+    await Promise.all([currentRun, currentCleanup]);
     logger.info("Market scheduler stopped");
   };
 
-  return { start, stop, run };
+  return { start, stop, run, runCleanup };
 };
 
 module.exports = {

@@ -238,6 +238,56 @@ describe("Market Scheduler", () => {
     await scheduler.stop();
   });
 
+  test("runCleanup logs a failed cleanup instead of throwing", async () => {
+    const cleanup = vi.fn().mockRejectedValue(new Error("Database unavailable"));
+    const scheduler = createMarketScheduler({
+      updatePrices: vi.fn().mockResolvedValue([]),
+      getExchanges: () => [],
+      cleanup,
+    });
+
+    await expect(scheduler.runCleanup()).resolves.toBeUndefined();
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    await scheduler.stop();
+  });
+
+  test("runCleanup skips while the previous cleanup is still running", async () => {
+    const deferred = createDeferred();
+    const cleanup = vi.fn().mockReturnValue(deferred.promise);
+    const scheduler = createMarketScheduler({
+      updatePrices: vi.fn().mockResolvedValue([]),
+      getExchanges: () => [],
+      cleanup,
+    });
+
+    const firstCleanup = scheduler.runCleanup();
+    expect(scheduler.runCleanup()).toBeNull();
+
+    deferred.resolve({});
+    await firstCleanup;
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    await scheduler.stop();
+  });
+
+  test("stop waits for a running cleanup and blocks new ones", async () => {
+    let finished = false;
+    const cleanup = vi.fn().mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      finished = true;
+      return {};
+    });
+    const scheduler = createMarketScheduler({
+      updatePrices: vi.fn().mockResolvedValue([]),
+      getExchanges: () => [],
+      cleanup,
+    });
+
+    scheduler.runCleanup();
+    await scheduler.stop();
+    expect(finished).toBe(true);
+    expect(scheduler.runCleanup()).toBeNull();
+  });
+
   test("stop aborts the current run and waits for it", async () => {
     let finished = false;
     const updatePrices = vi.fn().mockImplementation(

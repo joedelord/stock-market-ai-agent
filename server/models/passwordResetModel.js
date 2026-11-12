@@ -69,7 +69,17 @@ const resetPasswordWithToken = async (tokenHash, passwordHash) => {
   }
 };
 
+const deleteExpiredResetTokens = async () => {
+  const result = await pool.query(
+    `DELETE FROM password_reset_tokens
+     WHERE expires_at <= CURRENT_TIMESTAMP`,
+  );
+
+  return result.rowCount;
+};
+
 module.exports = {
   createResetToken,
   resetPasswordWithToken,
+  deleteExpiredResetTokens,
 };

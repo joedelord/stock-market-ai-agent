@@ -39,7 +39,17 @@ const verifyEmailWithToken = async (tokenHash) => {
   return result.rows[0];
 };
 
+const deleteExpiredVerificationTokens = async () => {
+  const result = await pool.query(
+    `DELETE FROM email_verification_tokens
+     WHERE expires_at <= CURRENT_TIMESTAMP`,
+  );
+
+  return result.rowCount;
+};
+
 module.exports = {
   createVerificationToken,
   verifyEmailWithToken,
+  deleteExpiredVerificationTokens,
 };

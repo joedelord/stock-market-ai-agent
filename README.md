@@ -15,15 +15,18 @@ template, so it also includes user accounts, roles, and admin tools.
 
 ## Status
 
-Work in progress.
+Ready for a first release. Features:
 
-- Done: authentication, user management, stocks REST API, Twelve Data
-  integration with a market-hours scheduler, stock dashboard with charts,
-  AI stock analysis, watchlists, price alerts with in-app and email
-  notifications, email verification, market holidays and early closes in
-  the scheduler, admin-only stock creation with a Twelve Data search UI.
-- Not yet done: choosing a production email provider (any SMTP provider
-  works, Gmail included, see [Email](#email)).
+- Authentication, email verification, password reset and user management
+- Stocks REST API and admin-only stock creation with a Twelve Data search UI
+- Twelve Data integration with a market-hours scheduler that knows market
+  holidays and early closes
+- Stock dashboard with charts, watchlists and AI stock analysis
+- Price alerts with in-app notifications and email delivery through any
+  SMTP provider or the Gmail API (see [Email](#email)), with one-click
+  unsubscribe
+- Health checks for the database and email delivery, and a daily cleanup
+  of old data
 
 ## Tech stack
 
@@ -695,6 +698,14 @@ day (one price request per run plus an hourly quote), so the free plan's
 800 requests per day covers about 18 stocks. On `SIGTERM` or `SIGINT` it
 finishes the current stock, closes the database pool and exits, or forces
 an exit after 20 seconds.
+
+The same process also cleans up old data every day at 03:00 UTC
+([server/jobs/cleanupData.js](server/jobs/cleanupData.js)), when neither
+market is open. It deletes notifications older than 90 days, password reset
+and email verification tokens that have expired, and stock prices older
+than 365 days. The AI analysis reads at most about 96 trading days of
+prices, so a year of history is never missed. A failed cleanup is logged
+and tried again the next day.
 
 Free Twelve Data keys have a per-minute request limit, and some exchanges
 need a paid plan.

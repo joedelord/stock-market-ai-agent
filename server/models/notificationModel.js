@@ -169,6 +169,16 @@ const expireAlertEmails = async (maxAgeMs) => {
   return result.rowCount;
 };
 
+const deleteOldNotifications = async (maxAgeMs) => {
+  const result = await pool.query(
+    `DELETE FROM notifications
+    WHERE created_at <= NOW() - $1 * INTERVAL '1 millisecond'`,
+    [maxAgeMs],
+  );
+
+  return result.rowCount;
+};
+
 module.exports = {
   getNotifications,
   getUnreadNotificationCount,
@@ -179,4 +189,5 @@ module.exports = {
   cancelAlertEmail,
   recordAlertEmailFailure,
   expireAlertEmails,
+  deleteOldNotifications,
 };
