@@ -47,6 +47,8 @@ jobs:
           cache: npm
           cache-dependency-path: server/package-lock.json
       - run: npm ci
+      # Production dependencies only: dev tools never reach the image.
+      - run: npm audit --omit=dev --audit-level=high
       - run: npm run migrate
       - run: npm test
 
@@ -64,6 +66,75 @@ jobs:
           cache: npm
           cache-dependency-path: client/package-lock.json
       - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
       - run: npm run lint
       - run: npm test
       - run: npm run build
+
+  # Builds the production image and starts it against a real database, so a
+  # file missing from the image or a failing production startup check breaks
+  # CI instead of a deploy.
+  docker:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: stock_market_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    # Throwaway values that pass the production startup checks. Email is not
+    # reachable, which only logs a warning at startup.
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/stock_market_db
+      JWT_SECRET: ci-smoke-test-jwt-secret-not-for-production-use
+      UNSUBSCRIBE_SECRET: ci-smoke-test-unsubscribe-secret-not-for-production
+      CLIENT_ORIGIN: http://localhost:5000
+      MAIL_FROM: ci@example.com
+      SMTP_HOST: localhost
+
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t stock-market-ai-agent .
+
+      # Host networking lets the containers reach the Postgres service port.
+      - name: Run migrations in the image
+        run: >-
+          docker run --rm --network host
+          -e DATABASE_URL -e JWT_SECRET -e UNSUBSCRIBE_SECRET
+          -e CLIENT_ORIGIN -e MAIL_FROM -e SMTP_HOST
+          stock-market-ai-agent npm run migrate
+
+      - name: Start the server
+        run: >-
+          docker run -d --name app --network host
+          -e DATABASE_URL -e JWT_SECRET -e UNSUBSCRIBE_SECRET
+          -e CLIENT_ORIGIN -e MAIL_FROM -e SMTP_HOST
+          stock-market-ai-agent
+
+      - name: Check the health endpoint and the built client
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://localhost:5000/api/health; then
+              break
+            fi
+            if [ "$attempt" = 30 ]; then
+              exit 1
+            fi
+            sleep 1
+          done
+          curl -fsS http://localhost:5000/ | grep -q '<div id="root">'
+          curl -fsS http://localhost:5000/stocks | grep -q '<div id="root">'
+
+      - name: Show server logs
+        if: always()
+        run: docker logs app || true
