@@ -937,6 +937,24 @@ The suite covers route guards, the auth provider, login, registration,
 password reset, admin components, the stock dashboard, chart and analysis,
 the alerts page and the notification center.
 
+### Continuous integration
+
+[GitHub Actions](.github/workflows/ci.yml) runs on every push to `main` and
+every pull request:
+
+- **server:** `npm audit` of production dependencies, migrations and the
+  backend tests against PostgreSQL
+- **client:** `npm audit` of production dependencies, lint, tests and the
+  production build
+- **docker:** builds the production image, runs its migrations, starts it
+  with production settings and checks `/api/health` and the served client
+
+The audits fail on high and critical advisories. Dev dependencies are left
+out, because they never reach the production image.
+[Dependabot](.github/dependabot.yml) opens weekly pull requests for npm
+updates (minor and patch updates grouped) and monthly ones for GitHub
+Actions and the Docker base image.
+
 ## npm scripts
 
 | Location  | Command                    | Description                |
