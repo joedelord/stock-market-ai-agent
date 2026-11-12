@@ -155,14 +155,16 @@ Other options:
 
 The server refuses to start if `JWT_SECRET` or the database settings are
 missing, or if `ENABLED_EXCHANGES` contains an unknown code. With
-`NODE_ENV=production` it also requires `CLIENT_ORIGIN`, `MAIL_FROM` and
-either `SMTP_HOST` or the `GMAIL_*` variables, so email links and delivery
-cannot fail silently. Setting only some of the `GMAIL_*` variables is an
+`NODE_ENV=production` it also requires `CLIENT_ORIGIN`, `MAIL_FROM`,
+`UNSUBSCRIBE_SECRET` and either `SMTP_HOST` or the `GMAIL_*` variables, so
+email links and delivery cannot fail silently. In production `JWT_SECRET` and
+`UNSUBSCRIBE_SECRET` must also be at least 32 characters long, must not be
+the example values and must differ from each other. Setting only some of the `GMAIL_*` variables is an
 error in every environment. `TWELVE_DATA_API_KEY` is only needed to fetch market data.
 Without `GROQ_API_KEY` and `GROQ_MODEL` everything else works, and the
 analysis endpoint returns `503`.
 
-Generate a JWT secret with:
+Generate each secret (`JWT_SECRET` and `UNSUBSCRIBE_SECRET`) separately with:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
@@ -579,9 +581,12 @@ Users turn alert emails on or off in their profile. Each alert email has an
 unsubscribe link in its footer (`CLIENT_ORIGIN/unsubscribe?token=...`, which
 asks for confirmation because link scanners open every link) and
 `List-Unsubscribe` headers, so Gmail shows its own one-click unsubscribe
-button. The token is an HMAC of the user id signed with `JWT_SECRET`. It
-does not expire, cannot be used to log in, and can only turn alert emails
-off. Changing `JWT_SECRET` invalidates the links in earlier emails.
+button. The token is an HMAC of the user id signed with `UNSUBSCRIBE_SECRET`
+(outside production it falls back to `JWT_SECRET`). It does not expire,
+cannot be used to log in, and can only turn alert emails off. Rotating
+`JWT_SECRET`, for example after a leak, logs everyone out but keeps these
+links working. Changing `UNSUBSCRIBE_SECRET` invalidates the links in
+earlier emails, so set it once before the first alert email is sent.
 
 ### Notifications
 
@@ -993,7 +998,8 @@ NODE_ENV=production SERVE_CLIENT=true npm start
 ## Production checklist
 
 - Set `NODE_ENV=production` and use HTTPS
-- Use a strong, unique `JWT_SECRET`
+- Use strong, unique `JWT_SECRET` and `UNSUBSCRIBE_SECRET` values (the
+  server enforces at least 32 characters and different values)
 - Use production PostgreSQL credentials and production Twelve Data and
   Groq keys
 - Set `CLIENT_ORIGIN` to the real frontend domain

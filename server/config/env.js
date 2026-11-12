@@ -3,6 +3,7 @@ const dotenv = require("dotenv");
 
 const { getEnabledExchanges } = require("./exchangeMapping");
 const { getMaxActiveStocks } = require("./stockLimit");
+const { validateSecrets } = require("./secrets");
 
 const envFile = process.env.NODE_ENV === "test" ? ".env.test" : ".env";
 
@@ -31,8 +32,11 @@ const GMAIL_VARIABLES = [
 const usesGmailApi = GMAIL_VARIABLES.some((name) => process.env[name]);
 
 // Without these, verification, password reset and alert emails would only
-// fail later, one request at a time.
-const PRODUCTION_VARIABLES = isProduction ? ["CLIENT_ORIGIN", "MAIL_FROM"] : [];
+// fail later, one request at a time. UNSUBSCRIBE_SECRET is separate from
+// JWT_SECRET, so rotating the login secret keeps old unsubscribe links valid.
+const PRODUCTION_VARIABLES = isProduction
+  ? ["CLIENT_ORIGIN", "MAIL_FROM", "UNSUBSCRIBE_SECRET"]
+  : [];
 
 const EMAIL_VARIABLES = usesGmailApi
   ? GMAIL_VARIABLES
@@ -60,3 +64,4 @@ if (missingVariables.length > 0) {
 // Fails at startup instead of on the first scheduler run or request.
 getEnabledExchanges();
 getMaxActiveStocks();
+validateSecrets();
