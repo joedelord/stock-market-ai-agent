@@ -1,5 +1,7 @@
 const crypto = require("crypto");
 
+const { getUnsubscribeSecret } = require("../config/secrets");
+
 // Mixed into the signature, so a signature made for another purpose with the
 // same secret is never accepted here.
 const PURPOSE = "alert-email-unsubscribe";
@@ -7,7 +9,7 @@ const TOKEN_PATTERN = /^(\d+)\.([0-9a-f]{64})$/;
 
 const sign = (userId) =>
   crypto
-    .createHmac("sha256", process.env.JWT_SECRET)
+    .createHmac("sha256", getUnsubscribeSecret())
     .update(`${PURPOSE}:${userId}`)
     .digest("hex");
 
