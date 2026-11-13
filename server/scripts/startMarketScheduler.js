@@ -1,5 +1,9 @@
 require("../config/env");
 
+const errorTracking = require("../utils/errorTracking");
+
+errorTracking.initErrorTracking();
+
 const pool = require("../config/db");
 const logger = require("../utils/logger");
 const { createMarketScheduler } = require("../jobs/marketScheduler");
@@ -24,6 +28,7 @@ const startMarketScheduler = async () => {
     try {
       await scheduler.stop();
       await pool.end();
+      await errorTracking.flushErrors();
     } catch (error) {
       logger.error({ err: error }, "Shutdown failed");
       process.exitCode = 1;
@@ -37,6 +42,7 @@ const startMarketScheduler = async () => {
     await scheduler.start();
   } catch (error) {
     logger.error({ err: error }, "Market scheduler failed to start");
+    errorTracking.captureError(error);
     process.exitCode = 1;
 
     await shutdown("startup failure");

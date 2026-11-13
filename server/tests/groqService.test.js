@@ -1,4 +1,5 @@
 const {
+  checkGroqModel,
   generateStockAnalysis,
   getAnalysisCacheKey,
 } = require("../services/groqService");
@@ -604,5 +605,76 @@ describe("Groq Service", () => {
     const result = await generateStockAnalysis({ stock, metrics });
 
     expect(result.model).toBe("test-model");
+  });
+});
+
+describe("checkGroqModel", () => {
+  let fetchMock;
+
+  const modelsResponse = (data) => ({
+    ok: true,
+    status: 200,
+    json: vi.fn().mockResolvedValue({ data }),
+  });
+
+  beforeEach(() => {
+    vi.stubEnv("GROQ_API_KEY", "test-api-key");
+    vi.stubEnv("GROQ_MODEL", "test-model");
+
+    fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  test("is ok when the model is listed and active", async () => {
+    fetchMock.mockResolvedValue(
+      modelsResponse([{ id: "other-model", active: true }, { id: "test-model", active: true }]),
+    );
+
+    await expect(checkGroqModel()).resolves.toEqual({ status: "ok" });
+
+    const [url, options] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://api.groq.com/openai/v1/models");
+    expect(options.headers.Authorization).toBe("Bearer test-api-key");
+  });
+
+  test("does not call Groq when AI is not configured", async () => {
+    vi.stubEnv("GROQ_MODEL", "");
+
+    await expect(checkGroqModel()).resolves.toEqual({ status: "not_configured" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ["missing", [{ id: "other-model", active: true }]],
+    ["inactive", [{ id: "test-model", active: false }]],
+  ])("fails when the model is %s", async (_, data) => {
+    fetchMock.mockResolvedValue(modelsResponse(data));
+
+    await expect(checkGroqModel()).resolves.toEqual({
+      status: "failing",
+      reason: "Groq model test-model is not available",
+    });
+  });
+
+  test("fails when Groq rejects the key", async () => {
+    fetchMock.mockResolvedValue(failedResponse(401, { errorBody: {} }));
+
+    await expect(checkGroqModel()).resolves.toEqual({
+      status: "failing",
+      reason: "Groq rejected GROQ_API_KEY",
+    });
+  });
+
+  test("is unknown when Groq cannot be asked", async () => {
+    fetchMock.mockResolvedValueOnce(failedResponse(503));
+    fetchMock.mockRejectedValueOnce(new TypeError("fetch failed"));
+
+    await expect(checkGroqModel()).resolves.toMatchObject({ status: "unknown" });
+    await expect(checkGroqModel()).resolves.toMatchObject({ status: "unknown" });
   });
 });

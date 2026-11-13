@@ -30,6 +30,9 @@ const requestLogger = pinoHttp({
       method: req.method,
       url: req.url,
       remoteAddress: req.remoteAddress,
+      // The client address after trust proxy, which the rate limits use.
+      // If it shows a proxy's address, TRUST_PROXY_HOPS is too low.
+      ip: req.raw.ip,
     }),
     res: (res) => ({
       statusCode: res.statusCode,

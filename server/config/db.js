@@ -1,6 +1,7 @@
 const { Pool } = require("pg");
 
 const logger = require("../utils/logger");
+const errorTracking = require("../utils/errorTracking");
 
 // DATABASE_URL is what most hosted PostgreSQL providers hand out; the
 // separate DB_* variables are convenient for local development.
@@ -32,6 +33,7 @@ const pool = new Pool({
 
 pool.on("error", (error) => {
   logger.error({ err: error }, "Unexpected PostgreSQL pool error");
+  errorTracking.captureError(error);
 });
 
 module.exports = pool;

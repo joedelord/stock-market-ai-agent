@@ -6,6 +6,7 @@ const {
 } = require("../jobs/marketScheduler");
 const { MARKET_CALENDAR } = require("../config/marketCalendar");
 const alertService = require("../services/alertService");
+const errorTracking = require("../utils/errorTracking");
 const { useUsExchangesOnly } = require("./helpers/exchanges");
 
 const [NEW_YORK, HELSINKI] = MARKET_HOURS;
@@ -318,5 +319,59 @@ describe("Market Scheduler", () => {
     await scheduler.stop();
     expect(scheduler.run()).toBeNull();
     expect(updatePrices).not.toHaveBeenCalled();
+  });
+
+  test("runCleanup pings the heartbeat only after a successful cleanup", async () => {
+    const pingHeartbeat = vi.fn().mockResolvedValue();
+    const cleanup = vi.fn()
+      .mockResolvedValueOnce({ notifications: 0 })
+      .mockRejectedValueOnce(new Error("Database unavailable"));
+    const captureError = vi.spyOn(errorTracking, "captureError");
+    const scheduler = createMarketScheduler({
+      updatePrices: vi.fn().mockResolvedValue([]),
+      getExchanges: () => [],
+      cleanup,
+      pingHeartbeat,
+    });
+
+    await scheduler.runCleanup();
+    expect(pingHeartbeat).toHaveBeenCalledTimes(1);
+
+    await scheduler.runCleanup();
+    expect(pingHeartbeat).toHaveBeenCalledTimes(1);
+    expect(captureError).toHaveBeenCalledWith(new Error("Database unavailable"));
+    await scheduler.stop();
+  });
+
+  test("runModelCheck reports a failing model and ignores an unknown result", async () => {
+    const checkAiModel = vi.fn()
+      .mockResolvedValueOnce({ status: "failing", reason: "Groq model x is not available" })
+      .mockResolvedValueOnce({ status: "unknown", reason: "fetch failed" });
+    const captureError = vi.spyOn(errorTracking, "captureError");
+    const scheduler = createMarketScheduler({
+      updatePrices: vi.fn().mockResolvedValue([]),
+      getExchanges: () => [],
+      checkAiModel,
+    });
+
+    await scheduler.runModelCheck();
+    expect(captureError).toHaveBeenCalledWith(new Error("Groq model x is not available"));
+
+    await scheduler.runModelCheck();
+    expect(captureError).toHaveBeenCalledTimes(1);
+    await scheduler.stop();
+  });
+
+  test("start checks the AI model", async () => {
+    const checkAiModel = vi.fn().mockResolvedValue({ status: "ok" });
+    const scheduler = createMarketScheduler({
+      updatePrices: vi.fn().mockResolvedValue([]),
+      getExchanges: () => [],
+      checkAiModel,
+    });
+
+    await scheduler.start();
+    await scheduler.stop();
+    expect(checkAiModel).toHaveBeenCalledTimes(1);
   });
 });
