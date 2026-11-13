@@ -27,6 +27,9 @@ Ready for a first release. Features:
   unsubscribe
 - Health checks for the database and email delivery, and a daily cleanup
   of old data
+- Deployment to Railway (API, scheduler, PostgreSQL) and Vercel (client),
+  with error tracking, uptime and heartbeat monitoring, a daily Groq model
+  check and encrypted daily database backups
 
 ## Tech stack
 
@@ -44,7 +47,7 @@ Ready for a first release. Features:
 - JWT (`jsonwebtoken`) in HttpOnly cookies, `bcryptjs`
 - Zod validation
 - Helmet, `express-rate-limit`
-- pino logging
+- pino logging, optional Sentry error tracking
 - `node-cron` for the market scheduler
 - Twelve Data API for market data
 - Groq API (OpenAI-compatible chat completions) for AI analysis
@@ -70,7 +73,8 @@ stock-market-ai-agent/
 │   │                          market holiday calendar
 │   ├── controllers/           Request handlers (auth, users, stocks,
 │   │                          analysis, watchlist, alerts, notifications)
-│   ├── jobs/                  Price update job and market scheduler
+│   ├── jobs/                  Price update job, market scheduler and
+│   │                          daily cleanup
 │   ├── middleware/            Auth, validation, rate limits, logging, errors
 │   ├── migrations/            SQL migrations, run in file name order
 │   ├── models/                SQL queries
@@ -152,6 +156,11 @@ Other options:
   [Enabled exchanges](#enabled-exchanges).
 - `MAX_ACTIVE_STOCKS` caps the number of active stocks (default `20`).
   See [Active stock limit](#active-stock-limit).
+- `TRUST_PROXY_HOPS` (production only, default `1`) is the number of
+  reverse proxies in front of the server. See
+  [Check the client address](#3-check-the-client-address).
+- `SENTRY_DSN` and `HEARTBEAT_URL` are optional. See
+  [Monitoring](#monitoring).
 - `MARKETAUX_API_KEY` is optional. It enables company news in the AI
   analysis for significant day moves; without it the analysis says news
   is not configured.
@@ -478,6 +487,9 @@ fails. Each Groq call logs one line: `Groq analysis generated` with the
 model, attempt, duration and token usage, or `Groq analysis attempt failed`
 with the reason and `willRetry`. A stale fallback logs `Groq busy, returned
 a stale analysis`.
+
+The scheduler checks daily that `GROQ_MODEL` is still offered by Groq; see
+[Groq model](#groq-model).
 
 `npm run eval:analysis` in `server/` runs fixed scenarios against the real
 model and checks the answers: no advice or forecasts, no causes stated as
@@ -874,8 +886,11 @@ server instances. Rate limits are off when `NODE_ENV=test`.
   runs this check at startup and logs the result.
 - **Shutdown:** on `SIGTERM`/`SIGINT` the server finishes open requests,
   closes the database pool and exits (forced after 10 seconds).
-- **Proxy:** in production Express trusts the first reverse proxy
-  (`trust proxy` = 1). Review this for your hosting setup.
+- **Proxy:** in production Express trusts `TRUST_PROXY_HOPS` reverse
+  proxies (default 1). Request logs show the resulting client address as
+  `ip`.
+- **Error tracking:** with `SENTRY_DSN`, unexpected errors go to Sentry
+  without request data. See [Monitoring](#monitoring).
 
 ## Testing
 
@@ -951,6 +966,8 @@ every pull request:
 
 The audits fail on high and critical advisories. Dev dependencies are left
 out, because they never reach the production image.
+A separate [backup workflow](.github/workflows/backup.yml) dumps the
+production database daily; see [Database backups](#database-backups).
 [Dependabot](.github/dependabot.yml) opens weekly pull requests for npm
 updates (minor and patch updates grouped) and monthly ones for GitHub
 Actions and the Docker base image.
@@ -975,12 +992,6 @@ Actions and the Docker base image.
 
 ## Deployment
 
-The production setup runs everything from one origin: Express serves the
-built client from `client/dist` when `SERVE_CLIENT=true`, and every path
-that is not under `/api` falls back to `index.html` for React Router. This
-keeps the `SameSite=Lax` session cookie working without CORS.
-`CLIENT_DIST_DIRECTORY` overrides the build location.
-
 The app needs three processes, all from the same code:
 
 | Process   | Command                | Runs                        |
@@ -991,6 +1002,217 @@ The app needs three processes, all from the same code:
 
 Run only one scheduler, or the same prices are fetched twice and Twelve
 Data credits run out sooner.
+
+The browser must reach the client and `/api` on one origin, so the
+`SameSite=Lax` session cookie works without CORS. Either Express serves the
+built client itself (`SERVE_CLIENT=true`, every non-`/api` path falls back to
+`index.html`; `CLIENT_DIST_DIRECTORY` overrides the build location), or a
+frontend host forwards `/api` to the server, as Vercel does below.
+
+### Railway and Vercel
+
+The production setup:
+
+```text
+Browser ── https://<app>.vercel.app
+             │  client/dist, security headers (client/vercel.json)
+             └─ /api/*  rewrite ──> Railway: web        (railway.json)
+                                    Railway: scheduler  (railway.scheduler.json)
+                                    Railway: PostgreSQL
+```
+
+The browser only talks to the Vercel domain, so the session cookie is
+first-party. Vercel waits up to 120 seconds for an `/api` response, longer
+than the slowest AI analysis (two Groq attempts of up to 30 seconds).
+
+#### 1. Railway
+
+1. Create a project from the GitHub repository and add a PostgreSQL
+   database (**+ Create → Database → PostgreSQL**).
+2. Name the GitHub service `web`. Under **Settings → Config as code** set
+   the file to `/railway.json`. It builds the `Dockerfile`, runs
+   `npm run migrate` before each deploy, and only switches traffic once
+   `/api/health` answers. Under **Networking**, generate a public domain.
+3. Add a second service from the same repository, name it `scheduler` and
+   set its config file to `/railway.scheduler.json`. It runs
+   `npm run market:watch` as one replica and has no domain.
+4. Set the variables. Values both services need go in **Project Settings →
+   Shared Variables**, shared with `web` and `scheduler`:
+
+   | Variable                             | Value                                          |
+   | ------------------------------------ | ---------------------------------------------- |
+   | `DATABASE_URL`                       | `${{Postgres.DATABASE_URL}}` (private network) |
+   | `CLIENT_ORIGIN`                      | `https://<app>.vercel.app`                     |
+   | `JWT_SECRET`, `UNSUBSCRIBE_SECRET`   | Two different generated secrets                |
+   | `MAIL_FROM`, `GMAIL_*`               | See [Gmail API](#gmail-api-hosts-that-block-smtp); Hobby blocks SMTP |
+   | `TWELVE_DATA_API_KEY`                | Twelve Data key                                |
+   | `GROQ_API_KEY`, `GROQ_MODEL`, `GROQ_REASONING_EFFORT` | See [AI stock analysis](#ai-stock-analysis) |
+   | `MARKETAUX_API_KEY`                  | Optional                                       |
+   | `SENTRY_DSN`                         | Optional, see [Monitoring](#monitoring)        |
+
+   Only on `web`:
+
+   | Variable           | Value                                               |
+   | ------------------ | --------------------------------------------------- |
+   | `SERVE_CLIENT`     | `false`: Vercel serves the client                   |
+   | `TRUST_PROXY_HOPS` | `2`: Vercel and Railway's edge sit in front of it   |
+
+   Only on `scheduler`: `HEARTBEAT_URL` (optional, see
+   [Monitoring](#monitoring)).
+
+   The Docker image already sets `NODE_ENV=production`. The private
+   `DATABASE_URL` needs no SSL, so leave `DB_SSL` unset.
+5. Deploy, then create the first admin in the running container:
+
+   ```bash
+   railway ssh --service web
+   npm run create-admin
+   ```
+
+Railway deploys both services from each push at the same time, and only
+`web` runs the migrations. A scheduler deploy can therefore start a few
+seconds before a new migration has run. Migrations that only add tables or
+columns are safe; for one that renames or drops something the old code
+reads, pause the scheduler during the release.
+
+#### 2. Vercel
+
+1. In [client/vercel.json](client/vercel.json), replace
+   `YOUR-RAILWAY-WEB-DOMAIN.up.railway.app` with the `web` service's
+   domain and commit. Vercel rewrites cannot read environment variables,
+   so the domain lives in the file.
+2. Import the repository in Vercel with **Root Directory** `client`. The
+   framework (Vite), build command and output directory are detected.
+   Set `VITE_CONTACT_EMAIL` in the project's environment variables to show
+   a contact address on `/privacy`.
+3. Put the production domain (`https://<app>.vercel.app`, or a custom one)
+   in Railway's `CLIENT_ORIGIN`. Email links are built from it.
+
+`vercel.json` also sends the same security headers helmet sends from
+Express (Content Security Policy and others) and caches the hashed files
+in `/assets` for a year. Preview deployments use the same rewrite, so they
+talk to the production API and database.
+
+#### 3. Check the client address
+
+Rate limits are counted per client IP address, which Express reads from
+`X-Forwarded-For` behind `TRUST_PROXY_HOPS` proxies. After the first
+deploy, open the app through Vercel and look at the `ip` field of your
+request in the `web` service's logs:
+
+- Your own public address: the setting is right.
+- A Vercel address, the same for every user: raise `TRUST_PROXY_HOPS`, or
+  everyone shares one rate limit.
+
+With `2`, someone who calls the Railway domain directly, past Vercel, can
+choose the address the rate limits see by sending their own
+`X-Forwarded-For`. The per-email login limit still holds. Use `1` if the
+API should only be reached on the Railway domain.
+
+### Monitoring
+
+#### Errors (Sentry)
+
+With `SENTRY_DSN` set (a free [Sentry](https://sentry.io) project of type
+Node.js), both processes report:
+
+- unhandled errors in API requests (the `500` responses), with the request
+  ID, method and path
+- failed price update runs, alert email retries and daily cleanups
+- a scheduler that fails to start, unexpected database pool errors, and
+  uncaught exceptions
+- a missing Groq model or a rejected Groq key (see below)
+
+Upstream errors that users already see as `502`, `503` or `504` (Groq busy,
+Twelve Data down) are only logged, because they are expected and would use
+up the free quota. Events carry no request bodies, headers, cookies, query
+strings or breadcrumbs: login passwords and reset tokens travel in request
+bodies, and the Twelve Data key is a query parameter of its outgoing
+requests. Sentry emails the project owner about each new issue.
+`SENTRY_ENVIRONMENT` overrides the environment name (default `NODE_ENV`),
+and Railway's commit SHA is the release.
+
+#### Uptime
+
+Point an uptime monitor (for example [UptimeRobot](https://uptimerobot.com)
+or Better Stack, both free) at the Vercel domain, so each check also covers
+Vercel's rewrite:
+
+| Monitor  | URL                                      | Alerts when                                 |
+| -------- | ---------------------------------------- | ------------------------------------------- |
+| App      | `https://<app>.vercel.app/api/health`    | Vercel, Railway or the database is down     |
+| Email    | `https://<app>.vercel.app/api/health/email` | Gmail token revoked or SMTP broken (`503`) |
+
+The email check is kept separate, so an email outage never fails a deploy's
+health check.
+
+#### Scheduler heartbeat
+
+The scheduler has no HTTP endpoint, so an uptime monitor cannot see that it
+stopped. Create a check at [healthchecks.io](https://healthchecks.io) (free)
+with a period of 1 day and a grace time of 2 hours, and set its ping URL as
+`HEARTBEAT_URL` on the `scheduler` service. The scheduler pings it after
+each successful daily cleanup at 03:00 UTC, so a stopped scheduler or a
+cleanup that keeps failing is reported by about 05:00 UTC the next day.
+
+#### Groq model
+
+`GROQ_MODEL` (`qwen/qwen3.8-27b`) is a Groq Preview model, which Groq can
+remove at short notice. It did so with `qwen/qwen3.6-27b` in October 2026.
+The scheduler checks Groq's model list at startup and daily at 03:00 UTC.
+A missing or inactive model, or a rejected `GROQ_API_KEY`, is logged as an
+error and reported to Sentry. A Groq outage during the check is only a
+warning.
+
+To switch models, pick one from
+[Groq's model list](https://console.groq.com/docs/models), run
+`npm run eval:analysis` with the new `GROQ_MODEL` (and a matching
+`GROQ_REASONING_EFFORT`, or none), then change the shared variable. Stored
+analyses are not reused across models, because the model is part of their
+cache key.
+
+### Database backups
+
+[.github/workflows/backup.yml](.github/workflows/backup.yml) dumps the
+production database every day at 04:30 UTC with `pg_dump` (in an image of
+the server's PostgreSQL version), restores the dump into an empty database
+to prove it works, encrypts it with GPG and keeps it as a workflow artifact
+for 30 days. Railway's own volume backups need the Pro plan and are lost
+with the volume, so this copy lives outside Railway.
+
+Setup:
+
+1. In Railway, open the PostgreSQL service's variables and copy
+   `DATABASE_PUBLIC_URL` (enable the TCP proxy under **Networking** if it is
+   missing). Append `?sslmode=require`.
+2. Generate a passphrase, for example with
+   `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`,
+   and store it in a password manager. Without it no backup can be
+   restored.
+3. Add both as repository secrets (**Settings → Secrets and variables →
+   Actions**): `BACKUP_DATABASE_URL` and `BACKUP_PASSPHRASE`.
+4. Run the workflow once from the **Actions** tab (**Run workflow**) and
+   check that it uploads a `database-YYYY-MM-DD` artifact.
+
+The repository is public, so its artifacts can be downloaded by anyone;
+that is why every dump is encrypted, and why the workflow never prints row
+counts. GitHub emails you when a scheduled run fails. It also disables
+scheduled workflows in public repositories after 60 days without activity,
+so re-enable the workflow after a quiet period. The dump leaves Railway
+over the public proxy, which counts as Railway egress (a few megabytes a
+day for this app).
+
+To restore, stop the `scheduler` service first, so it does not write
+during the restore, then:
+
+```bash
+gpg --decrypt database-2026-11-13.dump.gpg > backup.dump
+pg_restore --clean --if-exists --no-owner --dbname "$DATABASE_PUBLIC_URL" backup.dump
+```
+
+`--clean --if-exists` replaces the existing tables. To inspect a backup
+first, restore it into a local database instead. Delete `backup.dump`
+afterwards, because it is not encrypted.
 
 ### Docker
 
@@ -1007,14 +1229,11 @@ docker compose up --build
 docker compose run --rm web npm run create-admin
 ```
 
-On a hosting platform that builds from a Dockerfile, create one web
-service and one worker (`npm run market:watch`) from this image, run
+On another platform that builds from a Dockerfile, create one web service
+and one worker (`npm run market:watch`) from this image, run
 `npm run migrate` as the release or pre-deploy command, and use the
 platform's PostgreSQL with `DATABASE_URL` (and `DB_SSL=true` if required).
-Point the platform's health check at `/api/health`. To hear about broken
-email, point an uptime monitor (for example UptimeRobot) at
-`/api/health/email`. It is kept separate so an email outage never fails a
-deploy.
+Point the platform's health check at `/api/health`.
 
 ### Without Docker
 
@@ -1032,12 +1251,17 @@ NODE_ENV=production SERVE_CLIENT=true npm start
 - Use production PostgreSQL credentials and production Twelve Data and
   Groq keys
 - Set `CLIENT_ORIGIN` to the real frontend domain
-- Check cookie settings and the `trust proxy` setting
+- Set the Railway domain in `client/vercel.json`, `SERVE_CLIENT=false` and
+  `TRUST_PROXY_HOPS=2` on Railway, then
+  [check the client address](#3-check-the-client-address) in the logs
 - Point the `SMTP_*` variables at a real email provider, or set the
   `GMAIL_*` variables if the host blocks SMTP
-- Set `SERVE_CLIENT=true` (the Docker image does this)
-- Run `npm run migrate` before starting a new version
-- Run `npm run market:watch` as a long-running process next to the server
+- Run `npm run migrate` before starting a new version (Railway's
+  pre-deploy command does this)
+- Run exactly one `npm run market:watch` next to the server
+- Set `SENTRY_DSN`, the two uptime monitors and `HEARTBEAT_URL`
+- Add the backup secrets, run the backup workflow once and keep the
+  passphrase outside GitHub
 - Add next year's holidays to `server/config/marketCalendar.js` each autumn
 - Run both test suites and the frontend production build
 - Keep `.env` files out of Git

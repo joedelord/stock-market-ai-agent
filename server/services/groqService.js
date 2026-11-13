@@ -5,7 +5,9 @@ const HttpError = require("../utils/httpError");
 const logger = require("../utils/logger");
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const GROQ_MODELS_URL = "https://api.groq.com/openai/v1/models";
 const REQUEST_TIMEOUT_MS = 30_000;
+const MODEL_CHECK_TIMEOUT_MS = 10_000;
 // Groq checks this requested maximum against the output tokens per minute
 // limit (1000 on the free tier), so 500 leaves room for two requests a
 // minute. A 250-word answer needs ~350. Reasoning tokens also count here,
@@ -24,6 +26,7 @@ const CITATION_PATTERN = /\[(\d+)\]/g;
 const MAX_ATTEMPTS = 2;
 const JSON_VALIDATE_FAILED = "json_validate_failed";
 
+const UNAUTHORIZED = 401;
 const TOO_MANY_REQUESTS = 429;
 const BAD_GATEWAY = 502;
 const SERVICE_UNAVAILABLE = 503;
@@ -365,6 +368,62 @@ const requestStockAnalysis = async ({ stock, metrics, news }) => {
   }
 };
 
+// GROQ_MODEL is a Preview model, which Groq can remove at short notice, as
+// it did with qwen/qwen3.6-27b in October 2026. The scheduler runs this
+// daily, so a missing model is reported before users hit 502s.
+// Returns { status, reason }: "ok", "not_configured", "failing" (model gone
+// or key rejected) or "unknown" (Groq could not be asked).
+const checkGroqModel = async () => {
+  const apiKey = process.env.GROQ_API_KEY?.trim();
+  const model = process.env.GROQ_MODEL?.trim();
+
+  if (!apiKey || !model) {
+    return { status: "not_configured" };
+  }
+
+  let response;
+  let body;
+
+  try {
+    response = await fetch(GROQ_MODELS_URL, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+      },
+      signal: AbortSignal.timeout(MODEL_CHECK_TIMEOUT_MS),
+    });
+
+    if (response.ok) {
+      body = await response.json();
+    }
+  } catch (error) {
+    logger.warn({ model, reason: error.message }, "Groq model check failed");
+    return { status: "unknown", reason: error.message };
+  }
+
+  if (response.status === UNAUTHORIZED) {
+    const reason = "Groq rejected GROQ_API_KEY";
+    logger.error({ model }, reason);
+    return { status: "failing", reason };
+  }
+
+  if (!response.ok) {
+    const reason = `Groq responded with HTTP ${response.status}`;
+    logger.warn({ model, reason }, "Groq model check failed");
+    return { status: "unknown", reason };
+  }
+
+  const models = Array.isArray(body?.data) ? body.data : [];
+  const entry = models.find((item) => item?.id === model);
+
+  if (!entry || entry.active === false) {
+    const reason = `Groq model ${model} is not available`;
+    logger.error({ model }, reason);
+    return { status: "failing", reason };
+  }
+
+  return { status: "ok" };
+};
+
 // One line per Groq call shows how often answers are retried and how close
 // requests run to the per-minute token limits. Usage is kept out of the
 // analysis, because the analysis is stored and sent to users.
@@ -405,6 +464,7 @@ const generateStockAnalysis = async (input) => {
 };
 
 module.exports = {
+  checkGroqModel,
   generateStockAnalysis,
   getAnalysisCacheKey,
 };

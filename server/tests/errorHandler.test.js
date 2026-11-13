@@ -1,5 +1,6 @@
 const errorHandler = require("../middleware/errorHandler");
 const HttpError = require("../utils/httpError");
+const errorTracking = require("../utils/errorTracking");
 
 const mockRequest = () => ({
   log: {
@@ -20,6 +21,16 @@ const mockResponse = () => {
 };
 
 describe("Error Handler", () => {
+  let captureError;
+
+  beforeEach(() => {
+    captureError = vi.spyOn(errorTracking, "captureError");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   test("returns exposed client errors without logging them", () => {
     const req = mockRequest();
     const res = mockResponse();
@@ -85,5 +96,31 @@ describe("Error Handler", () => {
 
     expect(next).toHaveBeenCalledWith(error);
     expect(res.status).not.toHaveBeenCalled();
+  });
+
+  test("reports unexpected errors with the path but not the query string", () => {
+    const req = {
+      ...mockRequest(),
+      id: "request-1",
+      method: "POST",
+      path: "/api/auth/unsubscribe",
+      url: "/api/auth/unsubscribe?token=secret",
+    };
+    const error = new Error("Unexpected");
+
+    errorHandler(error, req, mockResponse(), vi.fn());
+
+    expect(captureError).toHaveBeenCalledWith(error, {
+      requestId: "request-1",
+      method: "POST",
+      path: "/api/auth/unsubscribe",
+    });
+  });
+
+  test("does not report exposed errors", () => {
+    errorHandler(new HttpError(502, "Upstream"), mockRequest(), mockResponse(), vi.fn());
+    errorHandler(new HttpError(404, "Not found"), mockRequest(), mockResponse(), vi.fn());
+
+    expect(captureError).not.toHaveBeenCalled();
   });
 });

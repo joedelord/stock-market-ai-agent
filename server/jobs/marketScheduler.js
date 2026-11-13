@@ -1,7 +1,10 @@
 const cron = require("node-cron");
 
 const logger = require("../utils/logger");
+const errorTracking = require("../utils/errorTracking");
 const alertService = require("../services/alertService");
+const groqService = require("../services/groqService");
+const heartbeatService = require("../services/heartbeatService");
 const { updateStockPrices } = require("./updateStockPrices");
 const { cleanupOldData } = require("./cleanupData");
 const { MARKET_CALENDAR } = require("../config/marketCalendar");
@@ -9,7 +12,8 @@ const { getEnabledExchanges } = require("../config/exchangeMapping");
 
 // Every 15 minutes on weekdays (UTC); market-specific local hours are below.
 const CRON_EXPRESSION = "*/15 * * * 1-5";
-// Daily at 03:00 UTC, when neither New York nor Helsinki is trading.
+// Daily at 03:00 UTC, when neither New York nor Helsinki is trading. Also
+// runs the AI model check.
 const CLEANUP_CRON_EXPRESSION = "0 3 * * *";
 
 // The close is the actual market close; a final-candle buffer is added below.
@@ -108,10 +112,13 @@ const createMarketScheduler = ({
   updatePrices = updateStockPrices,
   getExchanges = getOpenExchanges,
   cleanup = cleanupOldData,
+  checkAiModel = groqService.checkGroqModel,
+  pingHeartbeat = heartbeatService.pingHeartbeat,
 } = {}) => {
   const stopController = new AbortController();
   let currentRun = null;
   let currentCleanup = null;
+  let currentModelCheck = null;
 
   const updateAndLog = async (exchanges) => {
     try {
@@ -150,6 +157,7 @@ const createMarketScheduler = ({
       );
     } catch (error) {
       logger.error({ err: error }, "Price update run failed");
+      errorTracking.captureError(error, { exchanges });
     }
 
     // Separate from the price update, so a failed update still retries
@@ -164,6 +172,7 @@ const createMarketScheduler = ({
       }
     } catch (error) {
       logger.error({ err: error }, "Alert email retry failed");
+      errorTracking.captureError(error);
     }
   };
 
@@ -194,7 +203,35 @@ const createMarketScheduler = ({
       logger.info({ deleted }, "Old data cleaned up");
     } catch (error) {
       logger.error({ err: error }, "Data cleanup failed");
+      errorTracking.captureError(error);
+      return;
     }
+
+    // Only after a successful cleanup, so the heartbeat monitor also alerts
+    // when the scheduler runs but its daily job keeps failing.
+    await pingHeartbeat();
+  };
+
+  const checkModelAndLog = async () => {
+    try {
+      const { status, reason } = await checkAiModel();
+
+      if (status === "failing") {
+        errorTracking.captureError(new Error(reason));
+      }
+    } catch (error) {
+      logger.error({ err: error }, "AI model check failed");
+      errorTracking.captureError(error);
+    }
+  };
+
+  const runModelCheck = () => {
+    if (stopController.signal.aborted || currentModelCheck) return null;
+
+    currentModelCheck = checkModelAndLog().finally(() => {
+      currentModelCheck = null;
+    });
+    return currentModelCheck;
   };
 
   // Runs alongside price updates: it deletes only rows they never read.
@@ -208,9 +245,14 @@ const createMarketScheduler = ({
   };
 
   const task = cron.createTask(CRON_EXPRESSION, run, { timezone: "UTC" });
-  const cleanupTask = cron.createTask(CLEANUP_CRON_EXPRESSION, runCleanup, {
-    timezone: "UTC",
-  });
+  const cleanupTask = cron.createTask(
+    CLEANUP_CRON_EXPRESSION,
+    () => {
+      runCleanup();
+      runModelCheck();
+    },
+    { timezone: "UTC" },
+  );
 
   const start = async () => {
     task.start();
@@ -219,6 +261,9 @@ const createMarketScheduler = ({
       { schedule: CRON_EXPRESSION, cleanupSchedule: CLEANUP_CRON_EXPRESSION },
       "Market scheduler started",
     );
+    // Each deploy restarts the scheduler, so a model removed since the last
+    // daily check is reported right away. Runs alongside the price update.
+    runModelCheck();
     await run();
   };
 
@@ -226,11 +271,11 @@ const createMarketScheduler = ({
     task.stop();
     cleanupTask.stop();
     stopController.abort();
-    await Promise.all([currentRun, currentCleanup]);
+    await Promise.all([currentRun, currentCleanup, currentModelCheck]);
     logger.info("Market scheduler stopped");
   };
 
-  return { start, stop, run, runCleanup };
+  return { start, stop, run, runCleanup, runModelCheck };
 };
 
 module.exports = {

@@ -1,5 +1,9 @@
 require("./config/env");
 
+const errorTracking = require("./utils/errorTracking");
+
+errorTracking.initErrorTracking();
+
 const app = require("./app");
 const pool = require("./config/db");
 const logger = require("./utils/logger");
@@ -41,6 +45,7 @@ const shutdown = (signal) => {
     }
 
     await pool.end();
+    await errorTracking.flushErrors();
   });
 };
 

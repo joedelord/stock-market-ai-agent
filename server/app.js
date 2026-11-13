@@ -5,6 +5,7 @@ const cookieParser = require("cookie-parser");
 const helmet = require("helmet");
 
 const pool = require("./config/db");
+const { getTrustProxyHops } = require("./config/trustProxy");
 const requestLogger = require("./middleware/requestLogger");
 const emailService = require("./services/emailService");
 
@@ -24,8 +25,10 @@ const CLIENT_DIST_DIRECTORY =
 
 const app = express();
 
+// req.ip, and so every rate limit, uses the address the outermost trusted
+// proxy saw. See config/trustProxy.js for the Railway and Vercel hop counts.
 if (process.env.NODE_ENV === "production") {
-  app.set("trust proxy", 1);
+  app.set("trust proxy", getTrustProxyHops());
 }
 
 app.use(requestLogger);

@@ -1,3 +1,5 @@
+const errorTracking = require("../utils/errorTracking");
+
 const SERVER_ERROR_STATUS = 500;
 
 const errorHandler = (error, req, res, next) => {
@@ -32,6 +34,15 @@ const errorHandler = (error, req, res, next) => {
     },
     "Unhandled error",
   );
+
+  // Only unexpected errors: upstream 5xx errors (Groq, Twelve Data) are
+  // already explained to the user and would use up the Sentry quota. The
+  // path leaves out the query string, which can hold tokens.
+  errorTracking.captureError(error, {
+    requestId: req.id,
+    method: req.method,
+    path: req.path,
+  });
 
   return res.status(SERVER_ERROR_STATUS).json({
     error: "Internal server error",
