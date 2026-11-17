@@ -35,6 +35,21 @@ describe("Client serving", () => {
     expect(response.text).toBe("console.log(1);");
   });
 
+  test("caches hashed assets for a year", async () => {
+    const response = await request(app).get("/assets/app.js");
+
+    expect(response.headers["cache-control"]).toBe(
+      "public, max-age=31536000, immutable",
+    );
+  });
+
+  test("does not cache index.html for long", async () => {
+    const response = await request(app).get("/");
+
+    expect(response.status).toBe(200);
+    expect(response.headers["cache-control"]).toBe("public, max-age=0");
+  });
+
   test("serves index.html for client-side routes", async () => {
     const response = await request(app).get("/stocks/1");
 
