@@ -26,7 +26,7 @@ const CLIENT_DIST_DIRECTORY =
 const app = express();
 
 // req.ip, and so every rate limit, uses the address the outermost trusted
-// proxy saw. See config/trustProxy.js for the Railway and Vercel hop counts.
+// proxy saw. See config/trustProxy.js for the hop count.
 if (process.env.NODE_ENV === "production") {
   app.set("trust proxy", getTrustProxyHops());
 }

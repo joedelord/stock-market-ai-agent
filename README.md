@@ -27,7 +27,7 @@ Ready for a first release. Features:
   unsubscribe
 - Health checks for the database and email delivery, and a daily cleanup
   of old data
-- Deployment to Railway (API, scheduler, PostgreSQL) and Vercel (client),
+- Deployment to Railway (client and API, scheduler, PostgreSQL),
   with error tracking, uptime and heartbeat monitoring, a daily Groq model
   check and encrypted daily database backups
 
@@ -158,7 +158,7 @@ Other options:
   See [Active stock limit](#active-stock-limit).
 - `TRUST_PROXY_HOPS` (production only, default `1`) is the number of
   reverse proxies in front of the server. See
-  [Check the client address](#3-check-the-client-address).
+  [Check the client address](#check-the-client-address).
 - `SENTRY_DSN` and `HEARTBEAT_URL` are optional. See
   [Monitoring](#monitoring).
 - `MARKETAUX_API_KEY` is optional. It enables company news in the AI
@@ -1003,29 +1003,22 @@ The app needs three processes, all from the same code:
 Run only one scheduler, or the same prices are fetched twice and Twelve
 Data credits run out sooner.
 
-The browser must reach the client and `/api` on one origin, so the
-`SameSite=Lax` session cookie works without CORS. Either Express serves the
-built client itself (`SERVE_CLIENT=true`, every non-`/api` path falls back to
-`index.html`; `CLIENT_DIST_DIRECTORY` overrides the build location), or a
-frontend host forwards `/api` to the server, as Vercel does below.
+Express serves the built client from the same origin as `/api`
+(`SERVE_CLIENT=true`, set by the Docker image), so the `SameSite=Lax`
+session cookie works without CORS. Every non-`/api` path falls back to
+`index.html` for React Router; `CLIENT_DIST_DIRECTORY` overrides the build
+location.
 
-### Railway and Vercel
+### Railway
 
 The production setup:
 
 ```text
-Browser ── https://<app>.vercel.app
-             │  client/dist, security headers (client/vercel.json)
-             └─ /api/*  rewrite ──> Railway: web        (railway.json)
-                                    Railway: scheduler  (railway.scheduler.json)
-                                    Railway: PostgreSQL
+Browser ── https://<app>.up.railway.app
+             └─> Railway: web        (railway.json)  client/dist + /api
+                 Railway: scheduler  (railway.scheduler.json)
+                 Railway: PostgreSQL
 ```
-
-The browser only talks to the Vercel domain, so the session cookie is
-first-party. Vercel waits up to 120 seconds for an `/api` response, longer
-than the slowest AI analysis (two Groq attempts of up to 30 seconds).
-
-#### 1. Railway
 
 1. Create a project from the GitHub repository and add a PostgreSQL
    database (**+ Create → Database → PostgreSQL**).
@@ -1036,13 +1029,13 @@ than the slowest AI analysis (two Groq attempts of up to 30 seconds).
 3. Add a second service from the same repository, name it `scheduler` and
    set its config file to `/railway.scheduler.json`. It runs
    `npm run market:watch` as one replica and has no domain.
-4. Set the variables. Values both services need go in **Project Settings →
-   Shared Variables**, shared with `web` and `scheduler`:
+4. Set the variables in **Project Settings → Shared Variables**, shared
+   with `web` and `scheduler`:
 
    | Variable                             | Value                                          |
    | ------------------------------------ | ---------------------------------------------- |
    | `DATABASE_URL`                       | `${{Postgres.DATABASE_URL}}` (private network) |
-   | `CLIENT_ORIGIN`                      | `https://<app>.vercel.app`                     |
+   | `CLIENT_ORIGIN`                      | `https://<app>.up.railway.app`, the `web` domain |
    | `JWT_SECRET`, `UNSUBSCRIBE_SECRET`   | Two different generated secrets                |
    | `MAIL_FROM`, `GMAIL_*`               | See [Gmail API](#gmail-api-hosts-that-block-smtp); Hobby blocks SMTP |
    | `TWELVE_DATA_API_KEY`                | Twelve Data key                                |
@@ -1050,18 +1043,12 @@ than the slowest AI analysis (two Groq attempts of up to 30 seconds).
    | `MARKETAUX_API_KEY`                  | Optional                                       |
    | `SENTRY_DSN`                         | Optional, see [Monitoring](#monitoring)        |
 
-   Only on `web`:
-
-   | Variable           | Value                                               |
-   | ------------------ | --------------------------------------------------- |
-   | `SERVE_CLIENT`     | `false`: Vercel serves the client                   |
-   | `TRUST_PROXY_HOPS` | `2`: Vercel and Railway's edge sit in front of it   |
-
    Only on `scheduler`: `HEARTBEAT_URL` (optional, see
    [Monitoring](#monitoring)).
 
-   The Docker image already sets `NODE_ENV=production`. The private
-   `DATABASE_URL` needs no SSL, so leave `DB_SSL` unset.
+   The Docker image already sets `NODE_ENV=production` and
+   `SERVE_CLIENT=true`. The private `DATABASE_URL` needs no SSL, so leave
+   `DB_SSL` unset. `TRUST_PROXY_HOPS` defaults to `1`, Railway's edge.
 5. Deploy, then create the first admin in the running container:
 
    ```bash
@@ -1075,39 +1062,20 @@ seconds before a new migration has run. Migrations that only add tables or
 columns are safe; for one that renames or drops something the old code
 reads, pause the scheduler during the release.
 
-#### 2. Vercel
+A custom domain goes under the `web` service's **Settings → Networking**;
+put it in `CLIENT_ORIGIN` too, since email links are built from it.
 
-1. In [client/vercel.json](client/vercel.json), replace
-   `YOUR-RAILWAY-WEB-DOMAIN.up.railway.app` with the `web` service's
-   domain and commit. Vercel rewrites cannot read environment variables,
-   so the domain lives in the file.
-2. Import the repository in Vercel with **Root Directory** `client`. The
-   framework (Vite), build command and output directory are detected.
-   Set `VITE_CONTACT_EMAIL` in the project's environment variables to show
-   a contact address on `/privacy`.
-3. Put the production domain (`https://<app>.vercel.app`, or a custom one)
-   in Railway's `CLIENT_ORIGIN`. Email links are built from it.
-
-`vercel.json` also sends the same security headers helmet sends from
-Express (Content Security Policy and others) and caches the hashed files
-in `/assets` for a year. Preview deployments use the same rewrite, so they
-talk to the production API and database.
-
-#### 3. Check the client address
+#### Check the client address
 
 Rate limits are counted per client IP address, which Express reads from
 `X-Forwarded-For` behind `TRUST_PROXY_HOPS` proxies. After the first
-deploy, open the app through Vercel and look at the `ip` field of your
-request in the `web` service's logs:
+deploy, open the app and look at the `ip` field of your request in the
+`web` service's logs:
 
 - Your own public address: the setting is right.
-- A Vercel address, the same for every user: raise `TRUST_PROXY_HOPS`, or
-  everyone shares one rate limit.
-
-With `2`, someone who calls the Railway domain directly, past Vercel, can
-choose the address the rate limits see by sending their own
-`X-Forwarded-For`. The per-email login limit still holds. Use `1` if the
-API should only be reached on the Railway domain.
+- A proxy address, the same for every user: raise `TRUST_PROXY_HOPS` (for
+  example when a CDN sits in front of Railway), or everyone shares one
+  rate limit.
 
 ### Monitoring
 
@@ -1135,13 +1103,12 @@ and Railway's commit SHA is the release.
 #### Uptime
 
 Point an uptime monitor (for example [UptimeRobot](https://uptimerobot.com)
-or Better Stack, both free) at the Vercel domain, so each check also covers
-Vercel's rewrite:
+or Better Stack, both free) at the public domain:
 
-| Monitor  | URL                                      | Alerts when                                 |
-| -------- | ---------------------------------------- | ------------------------------------------- |
-| App      | `https://<app>.vercel.app/api/health`    | Vercel, Railway or the database is down     |
-| Email    | `https://<app>.vercel.app/api/health/email` | Gmail token revoked or SMTP broken (`503`) |
+| Monitor  | URL                                             | Alerts when                                 |
+| -------- | ----------------------------------------------- | ------------------------------------------- |
+| App      | `https://<app>.up.railway.app/api/health`       | Railway or the database is down             |
+| Email    | `https://<app>.up.railway.app/api/health/email` | Gmail token revoked or SMTP broken (`503`)  |
 
 The email check is kept separate, so an email outage never fails a deploy's
 health check.
@@ -1251,9 +1218,7 @@ NODE_ENV=production SERVE_CLIENT=true npm start
 - Use production PostgreSQL credentials and production Twelve Data and
   Groq keys
 - Set `CLIENT_ORIGIN` to the real frontend domain
-- Set the Railway domain in `client/vercel.json`, `SERVE_CLIENT=false` and
-  `TRUST_PROXY_HOPS=2` on Railway, then
-  [check the client address](#3-check-the-client-address) in the logs
+- [Check the client address](#check-the-client-address) in the logs
 - Point the `SMTP_*` variables at a real email provider, or set the
   `GMAIL_*` variables if the host blocks SMTP
 - Run `npm run migrate` before starting a new version (Railway's

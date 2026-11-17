@@ -1,6 +1,6 @@
-// Railway's edge is one proxy. Vercel's rewrite of /api to Railway adds a
-// second, and with one hop every user would share Vercel's IP address and
-// one rate limit bucket.
+// Railway's edge is one proxy. Another proxy in front of it (a CDN) adds a
+// hop, and with too few hops every user would share that proxy's IP address
+// and one rate limit bucket.
 const DEFAULT_TRUST_PROXY_HOPS = 1;
 
 // Read on every call, so tests and the startup check see the current value.
