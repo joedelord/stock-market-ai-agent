@@ -174,6 +174,46 @@ describe("Stock analysis", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
+  test("compares session volume with earlier sessions and passes it to Groq", async () => {
+    // 11 full earlier sessions of four bars, then a session two bars in.
+    const earlier = Array.from({ length: 11 }, (_, day) =>
+      makePrices(4, FIFTEEN_MINUTES_MS, 100, START_TIME + day * ONE_DAY_MS),
+    ).flat();
+    const current = makePrices(2, FIFTEEN_MINUTES_MS, 100, START_TIME + 11 * ONE_DAY_MS)
+      .map((price) => ({ ...price, volume: "3000" }));
+    await saveStockPrices(stock.id, "15min", [...earlier, ...current]);
+
+    const agent = await loginAsUser();
+    const response = await agent.post(`/api/stocks/${stock.id}/analysis`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.metrics.sessionActivity).toMatchObject({
+      sessionDate: "2026-10-30",
+      startsAtSessionOpen: true,
+      volume: 6000,
+      averageVolume: 2000,
+      relativeVolume: 3,
+      volumeBaselineSessions: 11,
+    });
+    const payload = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(JSON.parse(payload.messages[1].content).metrics.sessionActivity)
+      .toEqual(response.body.metrics.sessionActivity);
+  });
+
+  test("calculates period metrics from the latest 100 bars of a longer history", async () => {
+    await saveQuarterHourPrices(stock.id, 150);
+
+    const agent = await loginAsUser();
+    const response = await agent.post(`/api/stocks/${stock.id}/analysis`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.metrics).toMatchObject({
+      pointCount: 100,
+      firstClose: 150,
+      latestClose: 249,
+    });
+  });
+
   test("uses only 15min prices, even when other intervals are newer", async () => {
     await saveQuarterHourPrices(stock.id, 100);
 

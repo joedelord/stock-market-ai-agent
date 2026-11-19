@@ -12,6 +12,8 @@ const VOLATILITY_MULTIPLIER = 2;
 const MIN_SIGNIFICANT_PERCENT = 1;
 const MIN_VOLATILITY_RETURNS = 10;
 const MAX_VOLATILITY_RETURNS = 60;
+const RELATIVE_VOLUME_SESSIONS = 20;
+const MIN_RELATIVE_VOLUME_SESSIONS = 10;
 const EXCHANGE_TIME_ZONES = {
   XHEL: "Europe/Helsinki",
   XNAS: "America/New_York",
@@ -101,8 +103,55 @@ const calculateStockMetrics = (prices, interval = DEFAULT_INTERVAL) => {
   };
 };
 
-const localDate = (time, timeZone) =>
-  new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date(time));
+// Creating a formatter is slow, and thousands of bars are formatted per request.
+const localFormatters = new Map();
+
+const getLocalFormatter = (timeZone) => {
+  if (!localFormatters.has(timeZone)) {
+    localFormatters.set(
+      timeZone,
+      new Intl.DateTimeFormat("en-CA", {
+        timeZone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+      }),
+    );
+  }
+
+  return localFormatters.get(timeZone);
+};
+
+const localParts = (time, timeZone) => {
+  const parts = Object.fromEntries(
+    getLocalFormatter(timeZone)
+      .formatToParts(new Date(time))
+      .map(({ type, value }) => [type, value]),
+  );
+
+  return {
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    minutes: Number(parts.hour) * 60 + Number(parts.minute),
+  };
+};
+
+const localDate = (time, timeZone) => localParts(time, timeZone).date;
+
+const positiveOrNull = (value) => {
+  const number = parseDecimal(value);
+  return Number.isFinite(number) && number > 0 ? number : null;
+};
+
+const nonNegativeOrNull = (value) => {
+  const number = parseDecimal(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
+};
+
+const average = (values) =>
+  values.reduce((sum, value) => sum + value, 0) / values.length;
 
 // Only intraday bars are stored, so the last bar of each exchange-local date
 // approximates that day's close. Days before the quote's date are used, so
@@ -134,14 +183,32 @@ const calculateDailyVolatility = (prices, exchange, quoteTime) => {
 
   if (returns.length < MIN_VOLATILITY_RETURNS) return null;
 
-  const mean = returns.reduce((sum, value) => sum + value, 0) / returns.length;
+  const mean = average(returns);
   const variance =
     returns.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (returns.length - 1);
 
   return {
     volatilityPercent: Math.sqrt(variance),
     returnCount: returns.length,
+    // Oldest first. Used to rank the day move, not stored or sent as is.
+    returns,
   };
+};
+
+// Counts this move plus the earlier daily returns, newest first, that went
+// the same way. A flat return ends the streak.
+const countStreak = (direction, returns) => {
+  if (direction === "flat") return null;
+
+  const sign = direction === "up" ? 1 : -1;
+  let streak = 1;
+
+  for (let index = returns.length - 1; index >= 0; index -= 1) {
+    if (Math.sign(returns[index]) !== sign) break;
+    streak += 1;
+  }
+
+  return streak;
 };
 
 // Quote time is independent of the bar-history period. Do not substitute a
@@ -165,6 +232,9 @@ const calculateDayMovement = (quote, volatility = null) => {
   }
 
   const changePercent = ((close - previousClose) / previousClose) * 100;
+  const direction =
+    close > previousClose ? "up" : close < previousClose ? "down" : "flat";
+  const returns = Array.isArray(volatility?.returns) ? volatility.returns : null;
   const thresholdPercent = volatility
     ? Math.max(volatility.volatilityPercent * VOLATILITY_MULTIPLIER, MIN_SIGNIFICANT_PERCENT)
     : FALLBACK_SIGNIFICANT_PERCENT;
@@ -180,7 +250,131 @@ const calculateDayMovement = (quote, volatility = null) => {
     volatilityPercent: volatility?.volatilityPercent ?? null,
     volatilityReturnCount: volatility?.returnCount ?? 0,
     isSignificant: Math.abs(changePercent) >= thresholdPercent,
-    direction: close > previousClose ? "up" : close < previousClose ? "down" : "flat",
+    direction,
+    // A percentage alone does not say whether 2% is routine for this stock;
+    // these compare the move with the stock's own recent daily moves.
+    moveInStdDevs:
+      volatility?.volatilityPercent > 0
+        ? Math.abs(changePercent) / volatility.volatilityPercent
+        : null,
+    largerPastMoveCount: returns
+      ? returns.filter((value) => Math.abs(value) >= Math.abs(changePercent)).length
+      : null,
+    streakSessions: returns ? countStreak(direction, returns) : null,
+  };
+};
+
+const groupSessions = (prices, timeZone) => {
+  const sessions = new Map();
+
+  prices
+    .map((price) => ({
+      time: price.price_time == null ? NaN : new Date(price.price_time).getTime(),
+      open: positiveOrNull(price.open),
+      high: positiveOrNull(price.high),
+      low: positiveOrNull(price.low),
+      close: positiveOrNull(price.close),
+      volume: nonNegativeOrNull(price.volume),
+    }))
+    .filter((bar) => Number.isFinite(bar.time) && bar.close !== null)
+    .sort((a, b) => a.time - b.time)
+    .forEach((bar) => {
+      const { date, minutes } = localParts(bar.time, timeZone);
+      if (!sessions.has(date)) sessions.set(date, { date, bars: [] });
+      sessions.get(date).bars.push({ ...bar, minutes });
+    });
+
+  return [...sessions.values()];
+};
+
+const mostCommon = (values) => {
+  const counts = new Map();
+  values.forEach((value) => counts.set(value, (counts.get(value) ?? 0) + 1));
+
+  return [...counts.entries()].reduce(
+    (best, entry) => (entry[1] > best[1] ? entry : best),
+    [undefined, 0],
+  )[0];
+};
+
+// Null when a bar in the window lacks volume, since a partial sum would read
+// as unusually quiet trading.
+const volumeUntil = (session, cutoffMinutes) => {
+  const bars = session.bars.filter((bar) => bar.minutes <= cutoffMinutes);
+  if (bars.some((bar) => bar.volume === null)) return null;
+
+  return bars.reduce((sum, bar) => sum + bar.volume, 0);
+};
+
+// Describes the latest stored session from its bars. Volume is compared with
+// earlier sessions up to the same time of day, because a session in progress
+// has naturally traded less than a full one.
+const calculateSessionActivity = (prices, exchange) => {
+  if (!Array.isArray(prices)) {
+    throw new TypeError("Prices must be an array");
+  }
+
+  const timeZone = EXCHANGE_TIME_ZONES[exchange] ?? "UTC";
+  const sessions = groupSessions(prices, timeZone);
+
+  if (sessions.length === 0) return null;
+
+  const current = sessions.at(-1);
+  const earlier = sessions.slice(0, -1);
+  const lastBar = current.bars.at(-1);
+  const cutoffMinutes = lastBar.minutes;
+
+  // Price updates can start mid-session. A session whose first stored bar is
+  // later than usual is missing its open, so its gap, range and volume would
+  // be wrong.
+  const openMinutes = mostCommon(earlier.map((session) => session.bars[0].minutes));
+  const startsAtOpen = (session) =>
+    openMinutes !== undefined && session.bars[0].minutes === openMinutes;
+  const startsAtSessionOpen = startsAtOpen(current);
+
+  const summary = {
+    sessionDate: current.date,
+    lastBarTime: new Date(lastBar.time).toISOString(),
+    barCount: current.bars.length,
+    startsAtSessionOpen,
+    gapPercent: null,
+    sessionHigh: null,
+    sessionLow: null,
+    volume: null,
+    averageVolume: null,
+    relativeVolume: null,
+    volumeBaselineSessions: 0,
+  };
+
+  if (!startsAtSessionOpen) return summary;
+
+  const open = current.bars[0].open;
+  const previousClose = earlier.at(-1).bars.at(-1).close;
+  const highs = current.bars.map((bar) => bar.high).filter((value) => value !== null);
+  const lows = current.bars.map((bar) => bar.low).filter((value) => value !== null);
+
+  // Earlier sessions count only if they cover the same part of the day, so
+  // half days and late starts do not lower the baseline.
+  const baseline = earlier
+    .filter((session) => startsAtOpen(session) && session.bars.at(-1).minutes >= cutoffMinutes)
+    .slice(-RELATIVE_VOLUME_SESSIONS)
+    .map((session) => volumeUntil(session, cutoffMinutes))
+    .filter((value) => value !== null && value > 0);
+
+  // Zero volume for a whole session so far means the provider sent none.
+  const volume = volumeUntil(current, cutoffMinutes) || null;
+  const hasBaseline = volume !== null && baseline.length >= MIN_RELATIVE_VOLUME_SESSIONS;
+  const averageVolume = hasBaseline ? average(baseline) : null;
+
+  return {
+    ...summary,
+    gapPercent: open === null ? null : ((open - previousClose) / previousClose) * 100,
+    sessionHigh: highs.length > 0 ? highs.reduce((max, value) => Math.max(max, value)) : null,
+    sessionLow: lows.length > 0 ? lows.reduce((min, value) => Math.min(min, value)) : null,
+    volume,
+    averageVolume,
+    relativeVolume: hasBaseline ? volume / averageVolume : null,
+    volumeBaselineSessions: hasBaseline ? baseline.length : 0,
   };
 };
 
@@ -188,4 +382,5 @@ module.exports = {
   calculateStockMetrics,
   calculateDailyVolatility,
   calculateDayMovement,
+  calculateSessionActivity,
 };

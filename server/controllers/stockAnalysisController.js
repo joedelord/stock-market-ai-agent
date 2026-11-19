@@ -3,14 +3,16 @@ const {
   calculateStockMetrics,
   calculateDailyVolatility,
   calculateDayMovement,
+  calculateSessionActivity,
 } = require("../services/stockMetrics");
 const { getOrCreateStockAnalysis } = require("../services/stockAnalysisService");
 const { getStockNews } = require("../services/stockNewsService");
 
 const ANALYSIS_PRICE_LIMIT = 100;
 const ANALYSIS_INTERVAL = "15min";
-// About 60 trading days of 15-minute bars on the longest supported session.
-const VOLATILITY_PRICE_LIMIT = 2500;
+// About 60 trading days of 15-minute bars on the longest supported session,
+// for volatility and the volume baseline.
+const HISTORY_PRICE_LIMIT = 2500;
 
 const createStockAnalysis = async (req, res, next) => {
   try {
@@ -32,27 +34,26 @@ const createStockAnalysis = async (req, res, next) => {
       });
     }
 
-    const prices = await stockModel.getStockPrices(
+    // Prices come oldest first, so the period metrics use the latest bars of
+    // the same history that volatility and volume baselines need.
+    const history = await stockModel.getStockPrices(
       stockId,
-      ANALYSIS_PRICE_LIMIT,
+      HISTORY_PRICE_LIMIT,
       ANALYSIS_INTERVAL,
     );
 
-    const metrics = calculateStockMetrics(prices, ANALYSIS_INTERVAL);
+    const metrics = calculateStockMetrics(
+      history.slice(-ANALYSIS_PRICE_LIMIT),
+      ANALYSIS_INTERVAL,
+    );
 
     const quote = await stockModel.getStockQuote(stockId);
-    let volatility = null;
-
-    if (quote?.price_time) {
-      const history = await stockModel.getStockPrices(
-        stockId,
-        VOLATILITY_PRICE_LIMIT,
-        ANALYSIS_INTERVAL,
-      );
-      volatility = calculateDailyVolatility(history, stock.exchange, quote.price_time);
-    }
+    const volatility = quote?.price_time
+      ? calculateDailyVolatility(history, stock.exchange, quote.price_time)
+      : null;
 
     metrics.dayMovement = calculateDayMovement(quote, volatility);
+    metrics.sessionActivity = calculateSessionActivity(history, stock.exchange);
 
     const news = await getStockNews({ stock, dayMovement: metrics.dayMovement });
 

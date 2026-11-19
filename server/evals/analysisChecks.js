@@ -1,7 +1,8 @@
 // Checks for Groq analyses that the response validation in groqService cannot
 // do: wording rules from the prompt. Used by scripts/evalAnalysisPrompt.js.
 
-const MAX_WORDS = 275;
+// The prompt asks for under 300 words; this allows the model a small overrun.
+const MAX_WORDS = 325;
 
 // Advice and forecasts are banned by the prompt in every section.
 const ADVICE_PATTERNS = [
@@ -25,22 +26,29 @@ const LIVE_PATTERN = /\b(today|currently trading|right now|real-time|live price)
 
 // A number with an optional % sign, but not digits that belong to a word
 // (SMA20), a date (2026-10-17), a time (19:45) or a citation ([1]).
-const NUMBER_PATTERN = /(?<![\w.:,[])(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?(?![\w:\-\]])(\s?%|\s?percent)?/gi;
+// A scale word counts too, because volumes are written as "1.89 million".
+const NUMBER_PATTERN = /(?<![\w.:,[])(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?(?![\w:\-\]])(?:(\s?%|\s?percent)|\s(thousand|million|billion)\b)?/gi;
+const SCALES = { thousand: 1e3, million: 1e6, billion: 1e9 };
 
 // Field names and status codes from the input or prompt. Seeing one in the
 // text usually means the model copied a prompt line instead of answering.
 const INTERNAL_NAME_PATTERN =
-  /\b(news\.status|citedArticles|dayMovement|changePercent|isSignificant|thresholdMethod|previous(Bar|Session)Close|latestBarChangePercent|not_requested|not_configured|no_results)\b/;
+  /\b(news\.status|citedArticles|dayMovement|changePercent|isSignificant|thresholdMethod|previous(Bar|Session)Close|latestBarChangePercent|moveInStdDevs|largerPastMoveCount|streakSessions|sessionActivity|startsAtSessionOpen|relativeVolume|gapPercent|not_requested|not_configured|no_results)\b/;
 
 const countWords = (text) => text.split(/\s+/).filter(Boolean).length;
 
 const readNumbers = (text) =>
-  [...text.matchAll(NUMBER_PATTERN)].map(([match, whole, decimals, percent]) => ({
-    text: match.trim(),
-    value: Number(`${whole.replaceAll(",", "")}.${decimals ?? "0"}`),
-    decimals: decimals?.length ?? 0,
-    isPercent: Boolean(percent),
-  }));
+  [...text.matchAll(NUMBER_PATTERN)].map(([match, whole, decimals, percent, scaleWord]) => {
+    const scale = SCALES[scaleWord?.toLowerCase()] ?? 1;
+
+    return {
+      text: match.trim(),
+      value: Number(`${whole.replaceAll(",", "")}.${decimals ?? "0"}`) * scale,
+      decimals: decimals?.length ?? 0,
+      isPercent: Boolean(percent),
+      scale,
+    };
+  });
 
 const collectNumbers = (value) => {
   if (typeof value === "number") return Number.isFinite(value) ? [value] : [];
@@ -66,7 +74,7 @@ const findUnsupportedNumbers = (text, input) => {
   return readNumbers(text)
     .filter((number) => number.decimals > 0 || number.isPercent)
     .filter((number) => {
-      const tolerance = 0.5 * 10 ** -number.decimals + 1e-9;
+      const tolerance = 0.5 * 10 ** -number.decimals * number.scale + 1e-9;
       return !supplied.some((value) => Math.abs(value - number.value) <= tolerance);
     })
     .map((number) => number.text);

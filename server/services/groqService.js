@@ -64,6 +64,27 @@ Its timestamp may differ from the bar period; do not describe it as live or
 as today's movement. If null, say the day change is unavailable; never infer
 it from interval or period changes.
 Do not describe either as a daily change unless the data establishes that.
+When the volatility threshold is used, dayMovement also says how unusual the
+move is for this stock: moveInStdDevs is the absolute change divided by the
+typical daily move (describe it as "about N times its typical daily move"),
+largerPastMoveCount is how many of the volatilityReturnCount earlier daily
+moves were at least as large in either direction (0 means the largest in
+that span), and streakSessions counts consecutive sessions moving in this
+direction, including this one. Prefer these over the raw percentage when
+judging whether a move is unusual. They are null with the fixed threshold.
+metrics.sessionActivity describes the latest stored session (sessionDate, in
+exchange-local time) from its bars up to lastBarTime; it can be a different
+session from dayMovement. If startsAtSessionOpen is false, the stored bars
+miss the session start and its other values are null. gapPercent compares
+the session's first bar open with the last stored bar of the previous stored
+session; call it the opening gap. sessionHigh and sessionLow are intrabar
+extremes of the session so far. relativeVolume is the session's volume so
+far divided by averageVolume, the average volume by the same time of day over
+volumeBaselineSessions earlier sessions; describe it as "N times the usual
+volume". Above about 1.5 means unusually heavy trading, which suggests broad
+participation in the move; below about 0.7 means the move rests on thin
+trading. Neither proves a cause. If relativeVolume is null, say the volume
+comparison is unavailable. Mention volume and gap in priceMovement.
 SMA20 and SMA50 refer to price points, not necessarily trading days.
 A null moving average means there are too few points to calculate it.
 Minimum and maximum close are closing-price extremes, not intrabar highs or lows.
@@ -84,7 +105,7 @@ unavailable: the news provider was unavailable;
 no_results: no matching articles were found, which does not prove that no
 news exists.
 Do not make predictions, price targets or buy/sell recommendations.
-Keep all text values together under 250 words.
+Keep all text values together under 300 words.
 `.trim();
 
 const readError = async (response) => {
@@ -156,7 +177,9 @@ const parseAnalysisContent = (text, news) => {
   const markers = Object.values(sections).flatMap((section) =>
     [...section.matchAll(CITATION_PATTERN)].map((match) => Number(match[1])),
   );
-  const cited = [...new Set([...citedArticles, ...markers])].sort((a, b) => a - b);
+  const cited = [...new Set([...citedArticles, ...markers])].sort(
+    (a, b) => a - b,
+  );
   const available =
     news?.status === "available"
       ? new Set(news.articles.map((article) => article.number))
