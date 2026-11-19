@@ -120,6 +120,30 @@ describe("StockAnalysis", () => {
     ).toBeInTheDocument();
   });
 
+  it("compares the move with past moves and shows session volume", async () => {
+    const user = userEvent.setup();
+    const result = createAnalysis("A large move on heavy volume.");
+    result.metrics.dayMovement = {
+      changePercent: -4.1, thresholdPercent: 2.4, thresholdMethod: "volatility",
+      volatilityPercent: 1.2, volatilityReturnCount: 58, isSignificant: true,
+      direction: "down", moveInStdDevs: 3.42, largerPastMoveCount: 0, streakSessions: 3,
+      priceTime: "2026-10-20T19:00:00.000Z",
+    };
+    result.metrics.sessionActivity = {
+      sessionDate: "2026-10-20", lastBarTime: "2026-10-20T19:00:00.000Z",
+      startsAtSessionOpen: true, gapPercent: -2.3, relativeVolume: 2.6,
+    };
+    mockApi({ "POST /stocks/1/analysis": () => [200, result] });
+    render(<StockAnalysis stock={stock} />);
+    await user.click(screen.getByRole("button", { name: "Analyze" }));
+    expect(
+      await screen.findByText("3.4× the typical daily move, the largest in 58 days, 3 sessions down in a row"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/volume 2.6× the usual by this time of day, opening gap -2.30%/),
+    ).toBeInTheDocument();
+  });
+
   it("says when an analysis was reused", async () => {
     const user = userEvent.setup();
     const result = { ...createAnalysis("Unchanged analysis."), cached: true };

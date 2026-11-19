@@ -21,6 +21,14 @@ const metrics = (overrides = {}) => ({
   sma20: 103.1,
   sma50: 101.8,
   dayMovement: null,
+  // Real input always has one, and without it the model has invented
+  // session values. Ordinary volume, so it does not distract from the rule
+  // a scenario tests.
+  sessionActivity: sessionActivity({
+    gapPercent: 0.3,
+    volume: 1_890_000,
+    relativeVolume: 1.05,
+  }),
   ...overrides,
 });
 
@@ -40,6 +48,34 @@ const dayMovement = (changePercent, overrides = {}) => ({
   volatilityReturnCount: 0,
   isSignificant: Math.abs(changePercent) >= 3,
   direction: changePercent > 0 ? "up" : changePercent < 0 ? "down" : "flat",
+  // Null with the fixed threshold, as calculateDayMovement returns them.
+  moveInStdDevs: null,
+  largerPastMoveCount: null,
+  streakSessions: null,
+  ...overrides,
+});
+
+const volatilityThreshold = {
+  thresholdPercent: 2.4,
+  thresholdMethod: "volatility",
+  volatilityPercent: 1.2,
+  volatilityReturnCount: 58,
+  isSignificant: true,
+};
+
+// A session in progress: bars from the open up to the quote time.
+const sessionActivity = (overrides = {}) => ({
+  sessionDate: "2026-10-20",
+  lastBarTime: PRICE_TIME,
+  barCount: 26,
+  startsAtSessionOpen: true,
+  gapPercent: -2.3,
+  sessionHigh: 106.1,
+  sessionLow: 103.2,
+  volume: 4_680_000,
+  averageVolume: 1_800_000,
+  relativeVolume: 2.6,
+  volumeBaselineSessions: 20,
   ...overrides,
 });
 
@@ -110,6 +146,9 @@ const SCENARIOS = [
           volatilityPercent: 0.6,
           volatilityReturnCount: 25,
           isSignificant: true,
+          moveInStdDevs: 2.5,
+          largerPastMoveCount: 2,
+          streakSessions: 1,
         }),
       }),
       news: news("no_results"),
@@ -192,6 +231,74 @@ const SCENARIOS = [
       news: notRequested,
     },
     expect: { mustMatch: { priceMovement: [/30/] } },
+  },
+  {
+    name: "unusual-move-heavy-volume",
+    description: "A 3.4x typical move on 2.6x volume after an opening gap",
+    input: {
+      stock: APPLE,
+      metrics: metrics({
+        dayMovement: dayMovement(-4.1, {
+          ...volatilityThreshold,
+          moveInStdDevs: 3.42,
+          largerPastMoveCount: 0,
+          streakSessions: 3,
+        }),
+        sessionActivity: sessionActivity(),
+      }),
+      news: news("no_results"),
+    },
+    expect: {
+      mustMatch: {
+        priceMovement: [/3\.4\s?(times|x)/i, /2\.6\s?(times|x)/i, /gap/i, /largest|biggest/i],
+      },
+    },
+  },
+  {
+    name: "thin-volume",
+    description: "A significant move on below-usual volume",
+    input: {
+      stock: APPLE,
+      metrics: metrics({
+        dayMovement: dayMovement(1.6, {
+          ...volatilityThreshold,
+          moveInStdDevs: 1.33,
+          largerPastMoveCount: 9,
+          streakSessions: 1,
+        }),
+        sessionActivity: sessionActivity({ volume: 1_120_000, relativeVolume: 0.62, gapPercent: 0.1 }),
+      }),
+      news: news("no_results"),
+    },
+    expect: {
+      mustMatch: { priceMovement: [/0\.6\d?\s?(times|x)|(thin|light|low|below)[\w\s-]*(volume|trading)/i] },
+      mustNotMatch: [/heavy (volume|trading)/i],
+    },
+  },
+  {
+    name: "session-missing-open",
+    description: "Stored bars miss the session start, so volume and gap are unavailable",
+    input: {
+      stock: APPLE,
+      metrics: metrics({
+        dayMovement: dayMovement(1.2),
+        sessionActivity: sessionActivity({
+          startsAtSessionOpen: false,
+          gapPercent: null,
+          sessionHigh: null,
+          sessionLow: null,
+          volume: null,
+          averageVolume: null,
+          relativeVolume: null,
+          volumeBaselineSessions: 0,
+        }),
+      }),
+      news: notRequested,
+    },
+    expect: {
+      mustMatch: { priceMovement: [/volume[\w\s]*(unavailable|not available)|(unavailable|not available)[\w\s]*volume/i] },
+      mustNotMatch: [/\b(heavy|light|thin) (volume|trading)/i],
+    },
   },
   {
     name: "helsinki-eur",

@@ -163,6 +163,17 @@ function StockAnalysis({ stock }) {
                   ? `, twice the typical daily move of ${result.metrics.dayMovement.volatilityPercent.toFixed(2)}% over ${result.metrics.dayMovement.volatilityReturnCount} days)`
                   : ", fixed threshold: too little daily history to measure volatility)"}
               </p>
+              {/* Analyses stored before these fields existed lack them. */}
+              {result.metrics.dayMovement.moveInStdDevs != null && (
+                <p>
+                  {result.metrics.dayMovement.moveInStdDevs.toFixed(1)}× the typical daily move
+                  {result.metrics.dayMovement.largerPastMoveCount === 0
+                    ? `, the largest in ${result.metrics.dayMovement.volatilityReturnCount} days`
+                    : `, ${result.metrics.dayMovement.largerPastMoveCount} of ${result.metrics.dayMovement.volatilityReturnCount} earlier days moved as much`}
+                  {result.metrics.dayMovement.streakSessions > 1 &&
+                    `, ${result.metrics.dayMovement.streakSessions} sessions ${result.metrics.dayMovement.direction} in a row`}
+                </p>
+              )}
               <p className="mt-1 text-xs text-gray-500">
                 Stored quote: {formatTime(result.metrics.dayMovement.priceTime)}
                 {" (Helsinki time). May differ from the price history period."}
@@ -170,6 +181,23 @@ function StockAnalysis({ stock }) {
             </div>
           ) : (
             <p className="text-sm text-gray-500">Day change unavailable: no valid stored quote.</p>
+          )}
+
+          {result.metrics.sessionActivity?.startsAtSessionOpen && (
+            <div className="rounded-lg border border-gray-200 p-3 text-sm text-gray-700">
+              <p>
+                <strong>Session {result.metrics.sessionActivity.sessionDate}: </strong>
+                {result.metrics.sessionActivity.relativeVolume != null
+                  ? `volume ${result.metrics.sessionActivity.relativeVolume.toFixed(1)}× the usual by this time of day`
+                  : "volume comparison unavailable"}
+                {result.metrics.sessionActivity.gapPercent != null &&
+                  `, opening gap ${result.metrics.sessionActivity.gapPercent > 0 ? "+" : ""}${result.metrics.sessionActivity.gapPercent.toFixed(2)}%`}
+              </p>
+              <p className="mt-1 text-xs text-gray-500">
+                From price bars up to {formatTime(result.metrics.sessionActivity.lastBarTime)}
+                {" (Helsinki time)."}
+              </p>
+            </div>
           )}
 
           <div className="space-y-3">

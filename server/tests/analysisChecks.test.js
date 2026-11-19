@@ -1,4 +1,4 @@
-const { checkAnalysis } = require("../evals/analysisChecks");
+const { checkAnalysis, MAX_WORDS } = require("../evals/analysisChecks");
 const { SCENARIOS } = require("../evals/analysisScenarios");
 
 const analysis = (sections = {}, citedArticles = []) => ({
@@ -69,7 +69,7 @@ describe("Analysis checks", () => {
   });
 
   test("flags overly long answers", () => {
-    const long = Array.from({ length: 300 }, () => "word").join(" ");
+    const long = Array.from({ length: MAX_WORDS + 1 }, () => "word").join(" ");
 
     expect(checkAnalysis(analysis({ limitations: long }))).toEqual([
       expect.stringContaining("Too long"),
@@ -121,6 +121,15 @@ describe("Analysis checks", () => {
         'Number not in the supplied data: "4.2%"',
         'Number not in the supplied data: "104.50"',
         'Number not in the supplied data: "3.86%"',
+      ]);
+    });
+
+    test("reads thousand, million and billion as scales", () => {
+      const scaled = { metrics: { sessionActivity: { volume: 1_890_000, averageVolume: 2_450 } } };
+      const text = "Volume was 1.89 million shares against 2.4 thousand, or 1.9 billion.";
+
+      expect(checkAnalysis(analysis({ priceMovement: text }), {}, scaled)).toEqual([
+        'Number not in the supplied data: "1.9 billion"',
       ]);
     });
 
