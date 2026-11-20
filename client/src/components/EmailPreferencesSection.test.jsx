@@ -39,12 +39,49 @@ describe("EmailPreferencesSection", () => {
       email_verified_at: "2026-11-01",
     });
 
-    await userEvent.click(screen.getByRole("checkbox"));
+    await userEvent.click(
+      screen.getByRole("checkbox", { name: "Email me when an alert is triggered" }),
+    );
 
     expect(requests).toEqual([
       { route: ROUTE, body: { emailAlertsEnabled: false } },
     ]);
     expect(reloadUser).toHaveBeenCalled();
+  });
+
+  test("the daily summary is off unless the user turned it on", () => {
+    renderWithUser({ email_alerts_enabled: true, email_verified_at: "2026-11-01" });
+
+    expect(
+      screen.getByRole("checkbox", { name: /daily summary of my watchlist/ }),
+    ).not.toBeChecked();
+  });
+
+  test("turns the daily summary on without sending the alert setting", async () => {
+    const requests = mockApi({ [ROUTE]: () => [200, { user: {} }] });
+    renderWithUser({
+      email_alerts_enabled: true,
+      email_digest_enabled: false,
+      email_verified_at: "2026-11-01",
+    });
+
+    await userEvent.click(
+      screen.getByRole("checkbox", { name: /daily summary of my watchlist/ }),
+    );
+
+    expect(requests).toEqual([
+      { route: ROUTE, body: { emailDigestEnabled: true } },
+    ]);
+  });
+
+  test("shows no email hints when every email is off", () => {
+    renderWithUser({
+      email_alerts_enabled: false,
+      email_digest_enabled: false,
+      email_verified_at: null,
+    });
+
+    expect(screen.queryByText(/Confirm your email address first/)).not.toBeInTheDocument();
   });
 
   test("tells an unverified user that emails need a confirmed address", () => {
@@ -64,7 +101,9 @@ describe("EmailPreferencesSection", () => {
     mockApi({ [ROUTE]: () => [500, { error: "Something went wrong" }] });
     renderWithUser({ email_alerts_enabled: true, email_verified_at: "2026-11-01" });
 
-    await userEvent.click(screen.getByRole("checkbox"));
+    await userEvent.click(
+      screen.getByRole("checkbox", { name: "Email me when an alert is triggered" }),
+    );
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Something went wrong",

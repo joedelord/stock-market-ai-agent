@@ -50,15 +50,48 @@ const renderButton = ({ label, url }) => `
     <a href="${escapeHtml(url)}" style="color: ${COLORS.primary}; word-break: break-all;">${escapeHtml(url)}</a>
   </p>`;
 
+const renderLink = ({ label, url }) =>
+  `<p style="margin: 0 0 8px; font-size: 13px; line-height: 20px;"><a href="${escapeHtml(url)}" style="color: ${COLORS.primary};">${escapeHtml(label)}</a></p>`;
+
+// A label and a value per row, e.g. a stock and its day change.
+const renderTable = (rows) => `
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 16px; border-collapse: collapse;">
+    ${rows
+      .map(
+        ({ label, value }) => `
+    <tr>
+      <td style="padding: 8px 0; border-bottom: 1px solid ${COLORS.border}; font-size: 14px; line-height: 20px; color: ${COLORS.heading}; font-weight: 600;">${escapeHtml(label)}</td>
+      <td align="right" style="padding: 8px 0; border-bottom: 1px solid ${COLORS.border}; font-size: 14px; line-height: 20px; color: ${COLORS.text};">${escapeHtml(value)}</td>
+    </tr>`,
+      )
+      .join("")}
+  </table>`;
+
+const renderBlock = ({ heading, paragraphs = [], links = [] }) => `
+  <div style="margin: 0 0 20px;">
+    <p style="margin: 0 0 8px; font-size: 15px; line-height: 22px; font-weight: 700; color: ${COLORS.heading};">${escapeHtml(heading)}</p>
+    ${paragraphs.map(renderParagraph).join("")}
+    ${links.map(renderLink).join("")}
+  </div>`;
+
+// A titled part of a longer email, such as the daily summary.
+const renderSection = ({ title, paragraphs = [], blocks = [], rows = [] }) => `
+  <h2 style="margin: 24px 0 12px; font-size: 13px; line-height: 18px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: ${COLORS.muted};">${escapeHtml(title)}</h2>
+  ${paragraphs.map(renderParagraph).join("")}
+  ${blocks.map(renderBlock).join("")}
+  ${rows.length > 0 ? renderTable(rows) : ""}`;
+
 // Inline styles only: Gmail and Outlook drop or rewrite most <style> rules.
 const renderEmail = ({
   preheader,
   heading,
   paragraphs = [],
   highlight,
+  sections = [],
   button,
   footnote,
   unsubscribeUrl,
+  unsubscribeLabel = "Unsubscribe from alert emails",
 }) => `<!doctype html>
 <html lang="en">
   <head>
@@ -83,6 +116,7 @@ const renderEmail = ({
                 <h1 style="margin: 0 0 16px; font-size: 22px; line-height: 30px; font-weight: 700; color: ${COLORS.heading};">${escapeHtml(heading)}</h1>
                 ${highlight ? renderHighlight(highlight) : ""}
                 ${paragraphs.map(renderParagraph).join("")}
+                ${sections.map(renderSection).join("")}
                 ${button ? renderButton(button) : ""}
                 ${footnote ? `<p style="margin: 8px 0 0; padding-top: 16px; border-top: 1px solid ${COLORS.border}; font-size: 13px; line-height: 20px; color: ${COLORS.muted};">${escapeHtml(footnote)}</p>` : ""}
               </td>
@@ -90,7 +124,7 @@ const renderEmail = ({
             <tr>
               <td align="center" style="padding: 16px 4px 0; font-size: 12px; line-height: 18px; color: ${COLORS.muted};">
                 You received this email because you have an account at ${APP_NAME}.
-                ${unsubscribeUrl ? `<br><a href="${escapeHtml(unsubscribeUrl)}" style="color: ${COLORS.muted}; text-decoration: underline;">Unsubscribe from alert emails</a>` : ""}
+                ${unsubscribeUrl ? `<br><a href="${escapeHtml(unsubscribeUrl)}" style="color: ${COLORS.muted}; text-decoration: underline;">${escapeHtml(unsubscribeLabel)}</a>` : ""}
               </td>
             </tr>
           </table>

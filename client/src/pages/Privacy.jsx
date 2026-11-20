@@ -83,16 +83,20 @@ function Privacy() {
             <p>
               Address verification and password reset emails are sent when
               you ask for them. Alert emails are sent only to a verified
-              address, each time one of your alerts is triggered.
+              address, each time one of your alerts is triggered. If you
+              turn it on, a daily summary of your watchlist is sent after the
+              US market closes. Its AI explanations are written per stock
+              from market data and news, so nothing about you is sent to the
+              AI provider.
             </p>
             <p>
-              You can turn alert emails off on your{" "}
+              You can turn either kind of email off on your{" "}
               <Link to="/account" className="text-blue-700 underline">
                 profile
               </Link>{" "}
-              or with the unsubscribe link at the bottom of any alert email.
-              Your alerts keep working and still show up in the app. There
-              are no newsletters or marketing emails.
+              or with the unsubscribe link at the bottom of the email. Your
+              alerts keep working and still show up in the app. There are no
+              newsletters or marketing emails.
             </p>
           </Section>
 
@@ -100,7 +104,8 @@ function Privacy() {
             <p>
               Only to run the service: logging you in, showing your watchlist,
               checking your alerts, sending the emails you need (address
-              verification, password reset and alert notifications) and
+              verification, password reset, alert notifications and the daily
+              summary if you turn it on) and
               protecting accounts from abuse.
             </p>
           </Section>

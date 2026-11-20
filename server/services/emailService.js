@@ -7,6 +7,9 @@ const { APP_NAME, renderEmail } = require("./emailLayout");
 // A public endpoint asks for this, so the result is reused for a while
 // instead of contacting the provider on every request.
 const HEALTH_CACHE_MS = 5 * 60 * 1000;
+// 429 from the Gmail API; 421 and 452 are the SMTP "try again later" codes.
+const RATE_LIMIT_STATUS = 429;
+const SMTP_RATE_LIMIT_CODES = [421, 452];
 
 let healthCache = null;
 
@@ -106,6 +109,12 @@ const checkEmailHealth = async () => {
   return status;
 };
 
+// The provider's sending limit was hit, so further emails in the same run
+// would fail too.
+const isRateLimitError = (error) =>
+  error.status === RATE_LIMIT_STATUS ||
+  SMTP_RATE_LIMIT_CODES.includes(error.responseCode);
+
 const clearEmailHealthCache = () => {
   healthCache = null;
 };
@@ -175,14 +184,28 @@ const sendPasswordChangedEmail = async (email) => {
   });
 };
 
+// Builds the List-Unsubscribe headers and the link to the confirmation page.
+const getUnsubscribeLinks = (unsubscribeToken, list) => {
+  const query = `token=${encodeURIComponent(unsubscribeToken)}${list ? `&list=${list}` : ""}`;
+
+  return {
+    // The page asks for confirmation, because link scanners open every link.
+    pageUrl: `${process.env.CLIENT_ORIGIN}/unsubscribe?${query}`,
+    headers: {
+      // Gmail and other providers POST here from their own "Unsubscribe"
+      // button (RFC 8058). The server serves the client, so CLIENT_ORIGIN
+      // reaches /api.
+      "List-Unsubscribe": `<${process.env.CLIENT_ORIGIN}/api/auth/unsubscribe?${query}>`,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    },
+  };
+};
+
 const sendAlertNotificationEmail = async (email, message, unsubscribeToken) => {
   const alertsUrl = `${process.env.CLIENT_ORIGIN}/alerts`;
-  const token = encodeURIComponent(unsubscribeToken);
-  // The page asks for confirmation, because link scanners open every link.
-  const unsubscribePageUrl = `${process.env.CLIENT_ORIGIN}/unsubscribe?token=${token}`;
-  // Gmail and other providers POST here from their own "Unsubscribe" button
-  // (RFC 8058). The server serves the client, so CLIENT_ORIGIN reaches /api.
-  const unsubscribeApiUrl = `${process.env.CLIENT_ORIGIN}/api/auth/unsubscribe?token=${token}`;
+  // Alert emails keep the links without a list, as they had before the
+  // daily summary existed.
+  const { pageUrl, headers } = getUnsubscribeLinks(unsubscribeToken);
 
   return sendEmail({
     to: email,
@@ -190,7 +213,7 @@ const sendAlertNotificationEmail = async (email, message, unsubscribeToken) => {
     text: [
       message,
       `Manage your alerts: ${alertsUrl}`,
-      `Unsubscribe from alert emails: ${unsubscribePageUrl}`,
+      `Unsubscribe from alert emails: ${pageUrl}`,
     ].join("\n\n"),
     html: renderEmail({
       preheader: message,
@@ -198,17 +221,127 @@ const sendAlertNotificationEmail = async (email, message, unsubscribeToken) => {
       highlight: message,
       paragraphs: ["One of your price alerts was just triggered."],
       button: { label: "Manage your alerts", url: alertsUrl },
-      unsubscribeUrl: unsubscribePageUrl,
+      unsubscribeUrl: pageUrl,
     }),
-    headers: {
-      "List-Unsubscribe": `<${unsubscribeApiUrl}>`,
-      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-    },
+    headers,
+  });
+};
+
+const formatDigestDate = (digestDate) =>
+  new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC",
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  }).format(new Date(`${digestDate}T12:00:00Z`));
+
+const formatChange = (changePercent) =>
+  changePercent === null
+    ? "no data"
+    : `${changePercent > 0 ? "+" : ""}${changePercent.toFixed(2)} %`;
+
+const formatClose = (row) =>
+  row.close === null ? "" : `${row.close.toFixed(2)} ${row.currency}  `;
+
+const formatStock = (row) => `${row.symbol} (${row.exchange})`;
+
+const formatNearAlert = (alert) =>
+  `${alert.alertType === "price_above" ? "Above" : "Below"} ${alert.threshold} ${alert.currency}, ${Math.abs(alert.distancePercent).toFixed(1)} % away`;
+
+const toMoverBlock = (row) => ({
+  heading: `${formatStock(row)} ${formatChange(row.changePercent)} · ${row.name}`,
+  paragraphs: row.explanation
+    ? [row.explanation.priceMovement, row.explanation.newsContext]
+    : ["An AI explanation was not available for this move."],
+  links: (row.explanation?.articles ?? []).map((article) => ({
+    label: `[${article.number}] ${article.title} (${article.source})`,
+    url: article.url,
+  })),
+});
+
+const DIGEST_FOOTNOTE =
+  "The explanations are written by an AI model from price data and news headlines. They can be wrong and are not investment advice.";
+
+const sendDailyDigestEmail = async (email, digest, unsubscribeToken) => {
+  const dashboardUrl = `${process.env.CLIENT_ORIGIN}/stocks`;
+  const { pageUrl, headers } = getUnsubscribeLinks(unsubscribeToken, "digest");
+  const date = formatDigestDate(digest.digestDate);
+  const preheader = digest.rows
+    .slice(0, 3)
+    .map((row) => `${row.symbol} ${formatChange(row.changePercent)}`)
+    .join(", ");
+
+  const watchlistRows = digest.rows.map((row) => ({
+    label: formatStock(row),
+    value: `${formatClose(row)}${formatChange(row.changePercent)}`,
+  }));
+  const alertRows = digest.nearAlerts.map((alert) => ({
+    label: formatStock(alert),
+    value: formatNearAlert(alert),
+  }));
+
+  const sections = [
+    digest.movers.length > 0
+      ? { title: "Unusual moves", blocks: digest.movers.map(toMoverBlock) }
+      : {
+          title: "Unusual moves",
+          paragraphs: ["None of your stocks made an unusual move today."],
+        },
+    { title: "Your watchlist", rows: watchlistRows },
+    ...(alertRows.length > 0
+      ? [{ title: "Alerts close to triggering", rows: alertRows }]
+      : []),
+  ];
+
+  const text = [
+    `Your watchlist on ${date}`,
+    "Unusual moves",
+    ...(digest.movers.length > 0
+      ? digest.movers.map((row) => {
+          const block = toMoverBlock(row);
+
+          return [
+            block.heading,
+            ...block.paragraphs,
+            ...block.links.map((link) => `${link.label}: ${link.url}`),
+          ].join("\n");
+        })
+      : ["None of your stocks made an unusual move today."]),
+    "Your watchlist",
+    watchlistRows.map((row) => `${row.label}: ${row.value}`).join("\n"),
+    ...(alertRows.length > 0
+      ? [
+          "Alerts close to triggering",
+          alertRows.map((row) => `${row.label}: ${row.value}`).join("\n"),
+        ]
+      : []),
+    `Open your dashboard: ${dashboardUrl}`,
+    DIGEST_FOOTNOTE,
+    `Unsubscribe from the daily summary: ${pageUrl}`,
+  ].join("\n\n");
+
+  return sendEmail({
+    to: email,
+    subject: `${APP_NAME}: your watchlist on ${date}`,
+    text,
+    html: renderEmail({
+      preheader,
+      heading: `Your watchlist on ${date}`,
+      paragraphs: ["Here is how the stocks you follow did today."],
+      sections,
+      button: { label: "Open your dashboard", url: dashboardUrl },
+      footnote: DIGEST_FOOTNOTE,
+      unsubscribeUrl: pageUrl,
+      unsubscribeLabel: "Unsubscribe from the daily summary",
+    }),
+    headers,
   });
 };
 
 module.exports = {
   checkEmailHealth,
+  isRateLimitError,
+  sendDailyDigestEmail,
   clearEmailHealthCache,
   sendEmail,
   sendEmailVerificationEmail,

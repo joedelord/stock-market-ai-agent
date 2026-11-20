@@ -17,9 +17,6 @@ const EMAIL_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 // Keeps one run from spending a large share of Gmail's daily sending limit
 // (about 500 emails for a personal account).
 const MAX_EMAILS_PER_RUN = 100;
-// 429 from the Gmail API; 421 and 452 are the SMTP "try again later" codes.
-const RATE_LIMIT_STATUS = 429;
-const SMTP_RATE_LIMIT_CODES = [421, 452];
 
 // en-CA formats dates as YYYY-MM-DD, the format of a DATE column.
 const toMarketDate = (time, timeZone) =>
@@ -88,10 +85,6 @@ const getLatestPrice = async (stock) => {
   return { ...latest, previousClose, marketDate };
 };
 
-const isRateLimitError = (error) =>
-  error.status === RATE_LIMIT_STATUS ||
-  SMTP_RATE_LIMIT_CODES.includes(error.responseCode);
-
 // Sends pending alert emails one at a time, so a burst of alerts does not hit
 // the provider's rate limit. Stops at the first rate limit; the rest stay
 // pending for the next run. notificationIds limits it to those notifications.
@@ -134,7 +127,7 @@ const sendAlertEmails = async ({ notificationIds = null } = {}) => {
         "Failed to send alert email",
       );
 
-      if (isRateLimitError(error)) {
+      if (emailService.isRateLimitError(error)) {
         summary.rateLimited = true;
         break;
       }

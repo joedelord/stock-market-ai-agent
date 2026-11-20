@@ -209,8 +209,8 @@ const deleteOwnAccount = async (userId, password) => {
   return userModel.deleteUser(userId);
 };
 
-const setEmailAlertsEnabled = async (userId, enabled) => {
-  const user = await userModel.updateEmailAlertsEnabled(userId, enabled);
+const setEmailPreferences = async (userId, preferences) => {
+  const user = await userModel.updateEmailPreferences(userId, preferences);
 
   if (!user) {
     throw new HttpError(404, "User not found");
@@ -220,14 +220,19 @@ const setEmailAlertsEnabled = async (userId, enabled) => {
 };
 
 // A deleted account gets no emails anyway, so it counts as unsubscribed.
-const unsubscribeFromAlertEmails = async (token) => {
-  const userId = readUnsubscribeToken(token);
+const unsubscribeFromEmails = async (token, list) => {
+  const userId = readUnsubscribeToken(token, list);
 
   if (!userId) {
     throw new HttpError(400, "Invalid unsubscribe link");
   }
 
-  await userModel.updateEmailAlertsEnabled(userId, false);
+  await userModel.updateEmailPreferences(
+    userId,
+    list === "digest"
+      ? { emailDigestEnabled: false }
+      : { emailAlertsEnabled: false },
+  );
 };
 
 module.exports = {
@@ -240,6 +245,6 @@ module.exports = {
   verifyEmail,
   resendEmailVerification,
   deleteOwnAccount,
-  setEmailAlertsEnabled,
-  unsubscribeFromAlertEmails,
+  setEmailPreferences,
+  unsubscribeFromEmails,
 };
