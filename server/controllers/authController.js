@@ -10,8 +10,8 @@ const {
   verifyEmail: verifyUserEmail,
   resendEmailVerification,
   deleteOwnAccount,
-  setEmailAlertsEnabled,
-  unsubscribeFromAlertEmails,
+  setEmailPreferences,
+  unsubscribeFromEmails,
 } = require("../services/userService");
 const { createToken, verifyToken } = require("../utils/token");
 
@@ -212,10 +212,7 @@ const deleteAccount = async (req, res, next) => {
 
 const updateEmailPreferences = async (req, res, next) => {
   try {
-    const user = await setEmailAlertsEnabled(
-      req.user.id,
-      req.body.emailAlertsEnabled,
-    );
+    const user = await setEmailPreferences(req.user.id, req.body);
 
     return res.json({
       user,
@@ -227,10 +224,15 @@ const updateEmailPreferences = async (req, res, next) => {
 
 const unsubscribe = async (req, res, next) => {
   try {
-    await unsubscribeFromAlertEmails(req.validatedQuery.token);
+    const { token, list } = req.validatedQuery;
+
+    await unsubscribeFromEmails(token, list);
 
     return res.json({
-      message: "Alert emails turned off",
+      message:
+        list === "digest"
+          ? "Daily summary emails turned off"
+          : "Alert emails turned off",
     });
   } catch (error) {
     return next(error);

@@ -35,6 +35,19 @@ const register = async () => {
   return { agent, user: response.body.user };
 };
 
+const getEmailPreferences = async (userId) => {
+  const result = await pool.query(
+    `SELECT
+      email_alerts_enabled,
+      email_digest_enabled
+    FROM users
+    WHERE id = $1`,
+    [userId],
+  );
+
+  return result.rows[0];
+};
+
 const getEmailAlertsEnabled = async (userId) => {
   const result = await pool.query(
     `SELECT
@@ -74,6 +87,43 @@ describe("Email preferences", () => {
       .send({ emailAlertsEnabled: true });
 
     expect(on.body.user.email_alerts_enabled).toBe(true);
+  });
+
+  test("the daily summary is off for a new account", async () => {
+    const { user } = await register();
+
+    expect(user.email_digest_enabled).toBe(false);
+  });
+
+  test("changes the daily summary without touching alert emails", async () => {
+    const { agent, user } = await register();
+
+    const response = await agent
+      .patch("/api/auth/me/email-preferences")
+      .send({ emailDigestEnabled: true });
+
+    expect(response.status).toBe(200);
+    expect(response.body.user).toMatchObject({
+      email_alerts_enabled: true,
+      email_digest_enabled: true,
+    });
+    expect(await getEmailPreferences(user.id)).toEqual({
+      email_alerts_enabled: true,
+      email_digest_enabled: true,
+    });
+  });
+
+  test("rejects a request without any preference", async () => {
+    const { agent } = await register();
+
+    const response = await agent
+      .patch("/api/auth/me/email-preferences")
+      .send({});
+
+    expect(response.status).toBe(400);
+    expect(response.body.details).toEqual([
+      { field: "body", message: "Choose at least one email preference" },
+    ]);
   });
 
   test("rejects a value that is not a boolean", async () => {
@@ -134,6 +184,47 @@ describe("Unsubscribe link", () => {
     expect(response.status).toBe(400);
     expect(response.body).toEqual({ error: "Invalid unsubscribe link" });
     expect(await getEmailAlertsEnabled(user.id)).toBe(true);
+  });
+
+  test("turns off only the daily summary with a digest link", async () => {
+    const { agent, user } = await register();
+
+    await agent
+      .patch("/api/auth/me/email-preferences")
+      .send({ emailDigestEnabled: true });
+
+    const response = await request(app)
+      .post("/api/auth/unsubscribe")
+      .query({ token: createUnsubscribeToken(user.id, "digest"), list: "digest" });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ message: "Daily summary emails turned off" });
+    expect(await getEmailPreferences(user.id)).toEqual({
+      email_alerts_enabled: true,
+      email_digest_enabled: false,
+    });
+  });
+
+  test("rejects a token made for the other list", async () => {
+    const { user } = await register();
+
+    const response = await request(app)
+      .post("/api/auth/unsubscribe")
+      .query({ token: createUnsubscribeToken(user.id), list: "digest" });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ error: "Invalid unsubscribe link" });
+  });
+
+  test("rejects an unknown list", async () => {
+    const { user } = await register();
+
+    const response = await request(app)
+      .post("/api/auth/unsubscribe")
+      .query({ token: createUnsubscribeToken(user.id), list: "news" });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe("Validation failed");
   });
 
   test("rejects a malformed token", async () => {

@@ -11,6 +11,7 @@ const findUserByEmail = async (email) => {
       token_version,
       email_verified_at,
       email_alerts_enabled,
+      email_digest_enabled,
       created_at,
       updated_at
     FROM users
@@ -63,6 +64,7 @@ const createUser = async ({
       token_version,
       email_verified_at,
       email_alerts_enabled,
+      email_digest_enabled,
       created_at,
       updated_at`,
     [username, email, passwordHash, role, emailVerified],

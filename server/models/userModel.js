@@ -65,6 +65,7 @@ const getUserById = async (id) => {
       role,
       email_verified_at,
       email_alerts_enabled,
+      email_digest_enabled,
       created_at,
       updated_at
     FROM users
@@ -75,11 +76,17 @@ const getUserById = async (id) => {
   return result.rows[0];
 };
 
-const updateEmailAlertsEnabled = async (id, enabled) => {
+// A null preference keeps its current value, so one-click unsubscribe can
+// turn off one kind of email without touching the other.
+const updateEmailPreferences = async (
+  id,
+  { emailAlertsEnabled = null, emailDigestEnabled = null },
+) => {
   const result = await pool.query(
     `UPDATE users
     SET
-      email_alerts_enabled = $2
+      email_alerts_enabled = COALESCE($2, email_alerts_enabled),
+      email_digest_enabled = COALESCE($3, email_digest_enabled)
     WHERE id = $1
     RETURNING
       id,
@@ -88,9 +95,10 @@ const updateEmailAlertsEnabled = async (id, enabled) => {
       role,
       email_verified_at,
       email_alerts_enabled,
+      email_digest_enabled,
       created_at,
       updated_at`,
-    [id, enabled],
+    [id, emailAlertsEnabled, emailDigestEnabled],
   );
 
   return result.rows[0];
@@ -135,7 +143,7 @@ const deleteUser = async (id) => {
 
 module.exports = {
   getUsersPage,
-  updateEmailAlertsEnabled,
+  updateEmailPreferences,
   getUserById,
   updateUserRole,
   deleteUser,

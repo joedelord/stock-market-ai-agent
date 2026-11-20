@@ -25,6 +25,8 @@ Ready for a first release. Features:
 - Price alerts with in-app notifications and email delivery through any
   SMTP provider or the Gmail API (see [Email](#email)), with one-click
   unsubscribe
+- Opt-in daily summary email of each user's watchlist, with AI explanations
+  of the day's unusual moves (see [Daily summary email](#daily-summary-email))
 - Health checks for the database and email delivery, and a daily cleanup
   of old data
 - Deployment to Railway (client and API, scheduler, PostgreSQL),
@@ -209,6 +211,7 @@ only once.
 | `stock_alerts`          | Users' price and day change alert rules         |
 | `notifications`         | Messages created when an alert triggers         |
 | `stock_analyses`        | AI analyses and the metrics and news they used  |
+| `daily_digests`         | One row per user and day a summary is due       |
 
 `stocks.exchange` holds the ISO 10383 MIC code of the exchange (for
 example `XHEL`, `XNAS`, `XNYS`). `stock_prices` is unique by stock,
@@ -603,6 +606,42 @@ cannot be used to log in, and can only turn alert emails off. Rotating
 links working. Changing `UNSUBSCRIBE_SECRET` invalidates the links in
 earlier emails, so set it once before the first alert email is sent.
 
+### Daily summary email
+
+Users who turn it on in their profile get one email per US trading day
+with their watchlist's day changes, an AI explanation of each unusual move
+and the price alerts within 3 % of their threshold. It is off by default,
+because an unrequested daily email would be marked as spam and hurt the
+delivery of alert emails too.
+
+The scheduler runs it every 30 minutes from 17:00 to 20:30 New York time on
+trading days (US holidays are skipped unless Helsinki is enabled and open).
+Each run:
+
+1. Queues a `daily_digests` row for every user who wants the summary, has a
+   verified address and follows an active stock. The primary key (user,
+   day) means a restarted scheduler never sends a day's summary twice.
+2. Fetches a final quote for each stock in the queued summaries whose
+   stored quote is older than 45 minutes, because quotes refresh only
+   hourly during the day. This costs one Twelve Data credit per stock a day.
+3. Writes an AI explanation of the stocks whose day move was significant
+   (the same rule the [AI stock analysis](#ai-stock-analysis) uses to fetch
+   news), most unusual first, at most 10 a run and 30 seconds apart. An
+   explanation is written once per stock and shared by every user who
+   follows it, so Groq usage grows with the number of unusual moves, not
+   users. The explanations are stored analyses, so opening the analysis in
+   the app afterwards reuses them. If Groq is busy, the summary goes out
+   without the explanation. A stale analysis is not used, because its
+   numbers would not match the table.
+4. Sends the summaries one at a time. A failed email is retried on a later
+   run, after at least 25 minutes, up to 3 attempts. Summaries for an
+   earlier day are marked `failed` instead of sent late.
+
+The summary has its own unsubscribe link and `List-Unsubscribe` headers
+(`?list=digest`). Its token is signed for the digest only, so it cannot
+turn alert emails off, and an alert email's link cannot turn the summary
+off.
+
 ### Notifications
 
 | Method | Endpoint                 | Description                             |
@@ -744,8 +783,8 @@ session on every device.
 | POST   | `/api/auth/reset-password`      | Set a new password by token  |
 | POST   | `/api/auth/verify-email`        | Verify the email by token    |
 | POST   | `/api/auth/resend-verification` | Send a new verification link |
-| PATCH  | `/api/auth/me/email-preferences` | Turn alert emails on or off |
-| POST   | `/api/auth/unsubscribe?token=`   | Turn alert emails off by link |
+| PATCH  | `/api/auth/me/email-preferences` | Turn alert emails or the daily summary on or off |
+| POST   | `/api/auth/unsubscribe?token=`   | Turn alert emails (or with `&list=digest`, the daily summary) off by link |
 
 Deleting the own account needs the current password in the body
 (`{ "password": "..." }`). It removes the user's watchlist, alerts,
@@ -1086,7 +1125,8 @@ Node.js), both processes report:
 
 - unhandled errors in API requests (the `500` responses), with the request
   ID, method and path
-- failed price update runs, alert email retries and daily cleanups
+- failed price update runs, alert email retries, daily summary runs and
+  daily cleanups
 - a scheduler that fails to start, unexpected database pool errors, and
   uncaught exceptions
 - a missing Groq model or a rejected Groq key (see below)

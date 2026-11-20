@@ -142,6 +142,25 @@ describe("cleanupOldData", () => {
     expect(await countRows("stock_prices")).toBe(1);
   });
 
+  test("deletes daily digests older than 30 days", async () => {
+    await pool.query(
+      `INSERT INTO daily_digests (
+        user_id,
+        digest_date,
+        created_at
+      )
+      VALUES
+        ($1, '2026-01-01', $2),
+        ($1, '2026-01-02', $3)`,
+      [userId, daysAgo(31), daysAgo(29)],
+    );
+
+    const deleted = await cleanupOldData();
+
+    expect(deleted.dailyDigests).toBe(1);
+    expect(await countRows("daily_digests")).toBe(1);
+  });
+
   test("deletes nothing when all data is recent", async () => {
     await createNotification(new Date());
     await createPrice(new Date());
@@ -151,6 +170,7 @@ describe("cleanupOldData", () => {
       passwordResetTokens: 0,
       verificationTokens: 0,
       stockPrices: 0,
+      dailyDigests: 0,
     });
   });
 });

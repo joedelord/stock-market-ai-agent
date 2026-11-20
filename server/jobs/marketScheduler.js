@@ -3,6 +3,7 @@ const cron = require("node-cron");
 const logger = require("../utils/logger");
 const errorTracking = require("../utils/errorTracking");
 const alertService = require("../services/alertService");
+const dailyDigestService = require("../services/dailyDigestService");
 const groqService = require("../services/groqService");
 const heartbeatService = require("../services/heartbeatService");
 const { updateStockPrices } = require("./updateStockPrices");
@@ -15,6 +16,11 @@ const CRON_EXPRESSION = "*/15 * * * 1-5";
 // Daily at 03:00 UTC, when neither New York nor Helsinki is trading. Also
 // runs the AI model check.
 const CLEANUP_CRON_EXPRESSION = "0 3 * * *";
+// From 17:00 New York time, after the final US candle (16:15) is stored.
+// Repeats every 30 minutes until 20:30, so failed emails are retried and a
+// scheduler restarted in that window still sends the day's digest.
+const DIGEST_CRON_EXPRESSION = "0,30 17-20 * * 1-5";
+const DIGEST_TIME_ZONE = "America/New_York";
 
 // The close is the actual market close; a final-candle buffer is added below.
 const MARKET_HOURS = [
@@ -91,6 +97,23 @@ const isOpenAt = ({ timeZone, open, close }, exchange, date) => {
     && currentMinutes <= toMinutes(actualClose) + FINAL_CANDLE_BUFFER;
 };
 
+// The digest describes the New York market day, so its date decides. A
+// Helsinki-only setup still gets one, because Helsinki has closed by then.
+const hadTradingSession = (
+  date = new Date(),
+  enabledExchanges = getEnabledExchanges(),
+) => {
+  const localDate = dailyDigestService.getDigestDate(date);
+  const weekday = new Date(`${localDate}T12:00:00Z`).getUTCDay();
+
+  if (weekday === 0 || weekday === 6) return false;
+
+  return enabledExchanges.some(
+    (exchange) =>
+      !getCalendarDay(exchange, localDate.slice(0, 4), localDate)?.closed,
+  );
+};
+
 // Disabled exchanges are never fetched, even while their market is open.
 const getOpenExchanges = (
   date = new Date(),
@@ -114,11 +137,14 @@ const createMarketScheduler = ({
   cleanup = cleanupOldData,
   checkAiModel = groqService.checkGroqModel,
   pingHeartbeat = heartbeatService.pingHeartbeat,
+  sendDigests = dailyDigestService.sendDailyDigests,
+  hasTradingSession = hadTradingSession,
 } = {}) => {
   const stopController = new AbortController();
   let currentRun = null;
   let currentCleanup = null;
   let currentModelCheck = null;
+  let currentDigest = null;
 
   const updateAndLog = async (exchanges) => {
     try {
@@ -244,7 +270,44 @@ const createMarketScheduler = ({
     return currentCleanup;
   };
 
+  const digestAndLog = async () => {
+    try {
+      const result = await sendDigests({ signal: stopController.signal });
+      const { queued, expired, sent, failed, cancelled } = result;
+
+      if (queued + expired + sent + failed + cancelled > 0) {
+        logger.info(result, "Daily digests processed");
+      }
+    } catch (error) {
+      if (stopController.signal.aborted) return;
+
+      logger.error({ err: error }, "Daily digest run failed");
+      errorTracking.captureError(error);
+    }
+  };
+
+  const runDigest = (date = new Date()) => {
+    if (stopController.signal.aborted || currentDigest) return null;
+
+    if (!hasTradingSession(date)) {
+      logger.debug("No trading session today, skipping the daily digest");
+      return null;
+    }
+
+    currentDigest = digestAndLog().finally(() => {
+      currentDigest = null;
+    });
+    return currentDigest;
+  };
+
   const task = cron.createTask(CRON_EXPRESSION, run, { timezone: "UTC" });
+  const digestTask = cron.createTask(
+    DIGEST_CRON_EXPRESSION,
+    () => {
+      runDigest();
+    },
+    { timezone: DIGEST_TIME_ZONE },
+  );
   const cleanupTask = cron.createTask(
     CLEANUP_CRON_EXPRESSION,
     () => {
@@ -257,8 +320,13 @@ const createMarketScheduler = ({
   const start = async () => {
     task.start();
     cleanupTask.start();
+    digestTask.start();
     logger.info(
-      { schedule: CRON_EXPRESSION, cleanupSchedule: CLEANUP_CRON_EXPRESSION },
+      {
+        schedule: CRON_EXPRESSION,
+        cleanupSchedule: CLEANUP_CRON_EXPRESSION,
+        digestSchedule: `${DIGEST_CRON_EXPRESSION} ${DIGEST_TIME_ZONE}`,
+      },
       "Market scheduler started",
     );
     // Each deploy restarts the scheduler, so a model removed since the last
@@ -270,17 +338,24 @@ const createMarketScheduler = ({
   const stop = async () => {
     task.stop();
     cleanupTask.stop();
+    digestTask.stop();
     stopController.abort();
-    await Promise.all([currentRun, currentCleanup, currentModelCheck]);
+    await Promise.all([
+      currentRun,
+      currentCleanup,
+      currentModelCheck,
+      currentDigest,
+    ]);
     logger.info("Market scheduler stopped");
   };
 
-  return { start, stop, run, runCleanup, runModelCheck };
+  return { start, stop, run, runCleanup, runModelCheck, runDigest };
 };
 
 module.exports = {
   MARKET_HOURS,
   isMarketOpen,
   getOpenExchanges,
+  hadTradingSession,
   createMarketScheduler,
 };

@@ -96,4 +96,32 @@ describe("Unsubscribe", () => {
       "Invalid unsubscribe link",
     );
   });
+
+  test("turns off only the daily summary from a digest link", async () => {
+    const digestRoute = `${ROUTE}&list=digest`;
+    const requests = mockApi({
+      [digestRoute]: () => [200, { message: "Daily summary emails turned off" }],
+    });
+
+    renderAt(`/unsubscribe?token=${TOKEN}&list=digest`);
+
+    expect(screen.getByText(/alert emails are not affected/)).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Turn off the daily summary" }),
+    );
+
+    expect(
+      await screen.findByText(/no longer get the daily summary/),
+    ).toBeInTheDocument();
+    expect(requests).toEqual([{ route: digestRoute, body: undefined }]);
+  });
+
+  test("treats an unknown list as an invalid link", () => {
+    renderAt(`/unsubscribe?token=${TOKEN}&list=constructor`);
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "This unsubscribe link is not valid.",
+    );
+  });
 });

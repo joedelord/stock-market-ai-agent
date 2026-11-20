@@ -157,7 +157,7 @@ describe("Alert triggers", () => {
   });
 
   test("does not email a user who turned alert emails off", async () => {
-    await userModel.updateEmailAlertsEnabled(user.id, false);
+    await userModel.updateEmailPreferences(user.id, { emailAlertsEnabled: false });
     await createAlert();
 
     await saveBar(stock, BAR_TIME, "105");
@@ -291,7 +291,7 @@ describe("Alert triggers", () => {
     await saveBar(stock, BAR_TIME, "105");
     await checkStockAlerts(stock);
 
-    await userModel.updateEmailAlertsEnabled(user.id, false);
+    await userModel.updateEmailPreferences(user.id, { emailAlertsEnabled: false });
     await makeRetriesDue();
 
     expect(await retryAlertEmails()).toMatchObject({ sent: 0, cancelled: 1 });

@@ -1,6 +1,9 @@
 const { z } = require("zod");
 
-const { UNSUBSCRIBE_TOKEN_PATTERN } = require("../utils/unsubscribeToken");
+const {
+  UNSUBSCRIBE_LISTS,
+  UNSUBSCRIBE_TOKEN_PATTERN,
+} = require("../utils/unsubscribeToken");
 
 const emailField = z.email("Invalid email address").trim().toLowerCase();
 
@@ -67,10 +70,24 @@ const deleteAccountSchema = z.object({
   }),
 });
 
+// Each preference is optional, so the client can change one without
+// sending the other.
 const emailPreferencesSchema = z.object({
-  body: z.object({
-    emailAlertsEnabled: z.boolean("emailAlertsEnabled must be true or false"),
-  }),
+  body: z
+    .object({
+      emailAlertsEnabled: z
+        .boolean("emailAlertsEnabled must be true or false")
+        .optional(),
+      emailDigestEnabled: z
+        .boolean("emailDigestEnabled must be true or false")
+        .optional(),
+    })
+    .refine(
+      (body) =>
+        body.emailAlertsEnabled !== undefined ||
+        body.emailDigestEnabled !== undefined,
+      "Choose at least one email preference",
+    ),
 });
 
 // The token is in the query string, because email providers' one-click
@@ -80,6 +97,10 @@ const unsubscribeSchema = z.object({
     token: z
       .string("Invalid unsubscribe link")
       .regex(UNSUBSCRIBE_TOKEN_PATTERN, "Invalid unsubscribe link"),
+    // Alert emails sent before the daily summary existed have no list.
+    list: z
+      .enum(UNSUBSCRIBE_LISTS, "Invalid unsubscribe link")
+      .default("alerts"),
   }),
 });
 

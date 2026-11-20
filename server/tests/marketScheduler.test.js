@@ -2,6 +2,7 @@ const {
   MARKET_HOURS,
   isMarketOpen,
   getOpenExchanges,
+  hadTradingSession,
   createMarketScheduler,
 } = require("../jobs/marketScheduler");
 const { MARKET_CALENDAR } = require("../config/marketCalendar");
@@ -373,5 +374,80 @@ describe("Market Scheduler", () => {
     await scheduler.start();
     await scheduler.stop();
     expect(checkAiModel).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("daily digest schedule", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  test.each([
+    ["a normal weekday", "2026-10-22T21:00:00Z", ["XNAS", "XNYS"], true],
+    ["Thanksgiving in the US", "2026-11-26T22:00:00Z", ["XNAS", "XNYS"], false],
+    ["Thanksgiving with Helsinki enabled", "2026-11-26T22:00:00Z", ["XNAS", "XNYS", "XHEL"], true],
+    ["a Saturday", "2026-10-24T21:00:00Z", ["XNAS", "XNYS"], false],
+  ])("%s has a trading session: %s", (_, time, exchanges, expected) => {
+    expect(hadTradingSession(new Date(time), exchanges)).toBe(expected);
+  });
+
+  test("uses the New York date after midnight UTC", () => {
+    // 20:30 on Friday in New York is already Saturday in UTC.
+    expect(hadTradingSession(new Date("2026-10-24T00:30:00Z"), ["XNYS"])).toBe(true);
+  });
+
+  test("sends digests on a trading day", async () => {
+    const sendDigests = vi.fn().mockResolvedValue({
+      queued: 1, expired: 0, sent: 1, failed: 0, cancelled: 0,
+    });
+    const scheduler = createMarketScheduler({
+      sendDigests,
+      hasTradingSession: () => true,
+    });
+
+    await scheduler.runDigest();
+
+    expect(sendDigests).toHaveBeenCalledWith({ signal: expect.any(AbortSignal) });
+    await scheduler.stop();
+  });
+
+  test("skips digests on a market holiday", async () => {
+    const sendDigests = vi.fn();
+    const scheduler = createMarketScheduler({
+      sendDigests,
+      hasTradingSession: () => false,
+    });
+
+    expect(scheduler.runDigest()).toBeNull();
+    expect(sendDigests).not.toHaveBeenCalled();
+    await scheduler.stop();
+  });
+
+  test("skips a digest run while the previous one is still running", async () => {
+    const deferred = createDeferred();
+    const sendDigests = vi.fn().mockReturnValue(deferred.promise);
+    const scheduler = createMarketScheduler({
+      sendDigests,
+      hasTradingSession: () => true,
+    });
+
+    const firstRun = scheduler.runDigest();
+    expect(scheduler.runDigest()).toBeNull();
+
+    deferred.resolve({ queued: 0, expired: 0, sent: 0, failed: 0, cancelled: 0 });
+    await firstRun;
+    await scheduler.stop();
+  });
+
+  test("reports a failed digest run and keeps the scheduler running", async () => {
+    const captureError = vi.spyOn(errorTracking, "captureError").mockImplementation(() => {});
+    const scheduler = createMarketScheduler({
+      sendDigests: vi.fn().mockRejectedValue(new Error("Database unavailable")),
+      hasTradingSession: () => true,
+    });
+
+    await expect(scheduler.runDigest()).resolves.toBeUndefined();
+    expect(captureError).toHaveBeenCalledWith(expect.any(Error));
+    await scheduler.stop();
   });
 });

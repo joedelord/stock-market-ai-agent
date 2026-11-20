@@ -1,9 +1,23 @@
 const stockAnalysisModel = require("../models/stockAnalysisModel");
+const stockModel = require("../models/stockModel");
 const logger = require("../utils/logger");
 const {
   generateStockAnalysis,
   getAnalysisCacheKey,
 } = require("./groqService");
+const {
+  calculateStockMetrics,
+  calculateDailyVolatility,
+  calculateDayMovement,
+  calculateSessionActivity,
+} = require("./stockMetrics");
+const { getStockNews } = require("./stockNewsService");
+
+const ANALYSIS_PRICE_LIMIT = 100;
+const ANALYSIS_INTERVAL = "15min";
+// About 60 trading days of 15-minute bars on the longest supported session,
+// for volatility and the volume baseline.
+const HISTORY_PRICE_LIMIT = 2500;
 
 // Prices update every 15 minutes, so a new bar usually changes the key well
 // before this; the limit only stops old answers from living forever.
@@ -97,6 +111,37 @@ const getOrCreateStockAnalysis = async ({ stock, metrics, news }) => {
   }
 };
 
+// The metrics and news the model is given. Shared by the analysis endpoint
+// and the daily summary, so both describe a stock the same way and can reuse
+// each other's stored analyses.
+const buildStockAnalysisInput = async (stock) => {
+  // Prices come oldest first, so the period metrics use the latest bars of
+  // the same history that volatility and volume baselines need.
+  const history = await stockModel.getStockPrices(
+    stock.id,
+    HISTORY_PRICE_LIMIT,
+    ANALYSIS_INTERVAL,
+  );
+
+  const metrics = calculateStockMetrics(
+    history.slice(-ANALYSIS_PRICE_LIMIT),
+    ANALYSIS_INTERVAL,
+  );
+
+  const quote = await stockModel.getStockQuote(stock.id);
+  const volatility = quote?.price_time
+    ? calculateDailyVolatility(history, stock.exchange, quote.price_time)
+    : null;
+
+  metrics.dayMovement = calculateDayMovement(quote, volatility);
+  metrics.sessionActivity = calculateSessionActivity(history, stock.exchange);
+
+  const news = await getStockNews({ stock, dayMovement: metrics.dayMovement });
+
+  return { stock, metrics, news };
+};
+
 module.exports = {
+  buildStockAnalysisInput,
   getOrCreateStockAnalysis,
 };
