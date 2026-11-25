@@ -30,8 +30,8 @@ Ready for a first release. Features:
 - Health checks for the database and email delivery, and a daily cleanup
   of old data
 - Deployment to Railway (client and API, scheduler, PostgreSQL),
-  with error tracking, uptime and heartbeat monitoring, a daily Groq model
-  check and encrypted daily database backups
+  with error tracking, uptime and heartbeat monitoring and a daily Groq
+  model check
 
 ## Tech stack
 
@@ -1005,8 +1005,6 @@ every pull request:
 
 The audits fail on high and critical advisories. Dev dependencies are left
 out, because they never reach the production image.
-A separate [backup workflow](.github/workflows/backup.yml) dumps the
-production database daily; see [Database backups](#database-backups).
 [Dependabot](.github/dependabot.yml) opens weekly pull requests for npm
 updates (minor and patch updates grouped) and monthly ones for GitHub
 Actions and the Docker base image.
@@ -1178,49 +1176,6 @@ To switch models, pick one from
 analyses are not reused across models, because the model is part of their
 cache key.
 
-### Database backups
-
-[.github/workflows/backup.yml](.github/workflows/backup.yml) dumps the
-production database every day at 04:30 UTC with `pg_dump` (in an image of
-the server's PostgreSQL version), restores the dump into an empty database
-to prove it works, encrypts it with GPG and keeps it as a workflow artifact
-for 30 days. Railway's own volume backups need the Pro plan and are lost
-with the volume, so this copy lives outside Railway.
-
-Setup:
-
-1. In Railway, open the PostgreSQL service's variables and copy
-   `DATABASE_PUBLIC_URL` (enable the TCP proxy under **Networking** if it is
-   missing). Append `?sslmode=require`.
-2. Generate a passphrase, for example with
-   `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`,
-   and store it in a password manager. Without it no backup can be
-   restored.
-3. Add both as repository secrets (**Settings → Secrets and variables →
-   Actions**): `BACKUP_DATABASE_URL` and `BACKUP_PASSPHRASE`.
-4. Run the workflow once from the **Actions** tab (**Run workflow**) and
-   check that it uploads a `database-YYYY-MM-DD` artifact.
-
-The repository is public, so its artifacts can be downloaded by anyone;
-that is why every dump is encrypted, and why the workflow never prints row
-counts. GitHub emails you when a scheduled run fails. It also disables
-scheduled workflows in public repositories after 60 days without activity,
-so re-enable the workflow after a quiet period. The dump leaves Railway
-over the public proxy, which counts as Railway egress (a few megabytes a
-day for this app).
-
-To restore, stop the `scheduler` service first, so it does not write
-during the restore, then:
-
-```bash
-gpg --decrypt database-2026-11-13.dump.gpg > backup.dump
-pg_restore --clean --if-exists --no-owner --dbname "$DATABASE_PUBLIC_URL" backup.dump
-```
-
-`--clean --if-exists` replaces the existing tables. To inspect a backup
-first, restore it into a local database instead. Delete `backup.dump`
-afterwards, because it is not encrypted.
-
 ### Docker
 
 The `Dockerfile` builds the client and a production server image with
@@ -1265,8 +1220,6 @@ NODE_ENV=production SERVE_CLIENT=true npm start
   pre-deploy command does this)
 - Run exactly one `npm run market:watch` next to the server
 - Set `SENTRY_DSN`, the two uptime monitors and `HEARTBEAT_URL`
-- Add the backup secrets, run the backup workflow once and keep the
-  passphrase outside GitHub
 - Add next year's holidays to `server/config/marketCalendar.js` each autumn
 - Run both test suites and the frontend production build
 - Keep `.env` files out of Git
