@@ -40,7 +40,7 @@ jobs:
       COOKIE_EXPIRES_IN_MS: 3600000
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -59,7 +59,7 @@ jobs:
         working-directory: client
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -103,7 +103,7 @@ jobs:
       SMTP_HOST: localhost
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: docker build -t stock-market-ai-agent .
 
       # Host networking lets the containers reach the Postgres service port.
