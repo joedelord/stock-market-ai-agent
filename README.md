@@ -979,6 +979,42 @@ metrics and AI analysis, the market data client, the price update job and
 scheduler, watchlists, alerts, alert triggering and notifications. The
 tests never call Twelve Data or Groq; those requests are mocked.
 
+Lint the server code from `server/`:
+
+```bash
+npm run lint
+```
+
+Besides ESLint's recommended rules, [server/eslint.config.js](server/eslint.config.js)
+enforces the conventions in [CLAUDE.md](CLAUDE.md) that a linter can check:
+CommonJS only, arrow functions instead of function declarations, and no
+`RETURNING *` in SQL.
+
+### API contract tests
+
+[postman/stock-market-api.postman_collection.json](postman/stock-market-api.postman_collection.json)
+tests the running API over HTTP: the health check, public stock endpoints,
+error response shapes, and one user's register, session, logout and login
+flow. It needs no Twelve Data, Groq or email access, and creates a new user
+on every run, so it can run again against the same database.
+
+Start the server, then run the collection with the
+[Postman CLI](https://learning.postman.com/docs/postman-cli/postman-cli-installation/):
+
+```bash
+postman collection run postman/stock-market-api.postman_collection.json --env-var baseUrl=http://localhost:5000
+```
+
+or with Newman, as CI does:
+
+```bash
+npx --yes newman@6.2.3 run postman/stock-market-api.postman_collection.json --env-var baseUrl=http://localhost:5000
+```
+
+Each run makes three registration requests, and registration is limited to
+10 per hour per IP address, so about three runs an hour fit before it
+returns `429`.
+
 ### Frontend
 
 ```bash
@@ -996,12 +1032,13 @@ the alerts page and the notification center.
 [GitHub Actions](.github/workflows/ci.yml) runs on every push to `main` and
 every pull request:
 
-- **server:** `npm audit` of production dependencies, migrations and the
-  backend tests against PostgreSQL
+- **server:** `npm audit` of production dependencies, lint, migrations and
+  the backend tests against PostgreSQL
 - **client:** `npm audit` of production dependencies, lint, tests and the
   production build
 - **docker:** builds the production image, runs its migrations, starts it
-  with production settings and checks `/api/health` and the served client
+  with production settings, checks `/api/health` and the served client, and
+  runs the [API contract tests](#api-contract-tests) against it with Newman
 
 The audits fail on high and critical advisories. Dev dependencies are left
 out, because they never reach the production image.
@@ -1025,6 +1062,7 @@ Actions and the Docker base image.
 | `server/` | `npm run market:watch`     | Update prices on schedule  |
 | `server/` | `npm run market:watch:dev` | Same, with auto reload     |
 | `server/` | `npm run seed:mock`        | Add mock stocks and prices |
+| `server/` | `npm run lint`             | ESLint                     |
 | `server/` | `npm test`                 | Run tests                  |
 
 ## Deployment

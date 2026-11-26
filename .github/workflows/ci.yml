@@ -49,6 +49,7 @@ jobs:
       - run: npm ci
       # Production dependencies only: dev tools never reach the image.
       - run: npm audit --omit=dev --audit-level=high
+      - run: npm run lint
       - run: npm run migrate
       - run: npm test
 
@@ -134,6 +135,21 @@ jobs:
           done
           curl -fsS http://localhost:5000/ | grep -q '<div id="root">'
           curl -fsS http://localhost:5000/stocks | grep -q '<div id="root">'
+
+      # Against the production image, so the contract tests also cover
+      # production-only behaviour such as Secure cookies and trust proxy.
+      # Newman runs through npx with a pinned version instead of being a
+      # server dev dependency, because its dependency tree carries advisories
+      # that have no fix and would only add Dependabot noise.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Run API contract tests
+        run: >-
+          npx --yes newman@6.2.3 run
+          postman/stock-market-api.postman_collection.json
+          --env-var baseUrl=http://localhost:5000
 
       - name: Show server logs
         if: always()

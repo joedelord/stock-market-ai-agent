@@ -16,7 +16,7 @@ const requireAuth = async (req, res, next) => {
 
   try {
     payload = verifyToken(token);
-  } catch (error) {
+  } catch {
     return res.status(401).json({
       error: "Invalid or expired authentication token",
     });
