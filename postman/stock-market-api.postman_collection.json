@@ -1,0 +1,612 @@
+{
+  "info": {
+    "name": "Stock Market AI Agent API",
+    "description": "Contract tests for the API. Runs in order against an empty database: public endpoints, error shapes, then one user's register, session and logout flow. Needs no Twelve Data, Groq or email access.\n\nRun: postman collection run postman/stock-market-api.postman_collection.json --env-var baseUrl=http://localhost:5000",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "protocolProfileBehavior": {
+    "disableCookies": true
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// One unique user per run, so the collection can run again against the same database.",
+          "if (!pm.collectionVariables.get('runId')) {",
+          "  const runId = Date.now().toString(36);",
+          "  pm.collectionVariables.set('runId', runId);",
+          "  pm.collectionVariables.set('username', `contract_${runId}`);",
+          "  pm.collectionVariables.set('email', `contract_${runId}@example.com`);",
+          "  pm.collectionVariables.set('password', `Contract-${runId}-pass`);",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('responds with JSON', () => {",
+          "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');",
+          "});",
+          "",
+          "// Generous, because bcrypt and a cold start make auth requests slow on CI runners.",
+          "pm.test('responds within 5 seconds', () => {",
+          "  pm.expect(pm.response.responseTime).to.be.below(5000);",
+          "});"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Public",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/health"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('database is reachable', () => {",
+                  "  pm.expect(pm.response.json()).to.eql({ status: 'ok' });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List stocks",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/stocks"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('returns a stocks array', () => {",
+                  "  pm.expect(pm.response.json().stocks).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Market overview",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/stocks/overview"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('returns an object', () => {",
+                  "  pm.expect(pm.response.json()).to.be.an('object');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Error responses",
+      "item": [
+        {
+          "name": "Unknown stock",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/stocks/999999999"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));",
+                  "pm.test('error body', () => {",
+                  "  pm.expect(pm.response.json()).to.eql({ error: 'Stock not found' });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invalid stock ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/stocks/abc"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('validation error with field details', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.error).to.eql('Validation failed');",
+                  "  pm.expect(body.details).to.be.an('array').that.is.not.empty;",
+                  "  pm.expect(body.details[0]).to.have.keys('field', 'message');",
+                  "  pm.expect(body.details[0].field).to.eql('params.id');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unknown route",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/does-not-exist"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));",
+                  "pm.test('error body', () => {",
+                  "  pm.expect(pm.response.json()).to.eql({ error: 'Route not found' });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Current user without a session",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/auth/me"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('error body', () => {",
+                  "  pm.expect(pm.response.json()).to.eql({ error: 'Authentication required' });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Watchlist without a session",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/me/stocks"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('error body', () => {",
+                  "  pm.expect(pm.response.json()).to.eql({ error: 'Authentication required' });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Auth flow",
+      "item": [
+        {
+          "name": "Register with invalid input",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"ab\",\n  \"email\": \"not-an-email\",\n  \"password\": \"short\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('reports every invalid field', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.error).to.eql('Validation failed');",
+                  "  const fields = body.details.map((detail) => detail.field);",
+                  "  pm.expect(fields).to.include.members(['body.username', 'body.email', 'body.password']);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "",
+                  "const { user } = pm.response.json();",
+                  "",
+                  "pm.test('returns the new user', () => {",
+                  "  pm.expect(user.username).to.eql(pm.collectionVariables.get('username'));",
+                  "  pm.expect(user.email).to.eql(pm.collectionVariables.get('email'));",
+                  "  pm.expect(user.role).to.eql('user');",
+                  "});",
+                  "",
+                  "pm.test('never returns secrets', () => {",
+                  "  pm.expect(user).to.not.have.any.keys('password_hash', 'token_version');",
+                  "});",
+                  "",
+                  "// Read from the header, because the cookie is Secure in production",
+                  "// and the cookie jar would not send it over plain http.",
+                  "const setCookie = pm.response.headers.get('Set-Cookie') || '';",
+                  "const match = setCookie.match(/auth_token=([^;]+)/);",
+                  "",
+                  "pm.test('sets an HttpOnly auth cookie', () => {",
+                  "  pm.expect(match, 'auth_token cookie').to.not.be.null;",
+                  "  pm.expect(setCookie).to.include('HttpOnly');",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set('authToken', match ? match[1] : '');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register with a used email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}_2\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 409', () => pm.response.to.have.status(409));",
+                  "pm.test('error body', () => {",
+                  "  pm.expect(pm.response.json()).to.eql({ error: 'Email is already in use' });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Current user",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "auth_token={{authToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/me"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('returns the signed-in user', () => {",
+                  "  const { user } = pm.response.json();",
+                  "  pm.expect(user.email).to.eql(pm.collectionVariables.get('email'));",
+                  "  pm.expect(user).to.not.have.any.keys('password_hash', 'token_version');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Watchlist",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "auth_token={{authToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/me/stocks"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('a new user has an empty watchlist', () => {",
+                  "  pm.expect(pm.response.json()).to.eql({ stocks: [] });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Alerts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "auth_token={{authToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/alerts"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('a new user has no alerts', () => {",
+                  "  pm.expect(pm.response.json()).to.eql({ alerts: [] });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "auth_token={{authToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/notifications"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('a new user has no notifications', () => {",
+                  "  pm.expect(pm.response.json()).to.eql({ notifications: [], unreadCount: 0 });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Users list as a regular user",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "auth_token={{authToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('error body', () => {",
+                  "  pm.expect(pm.response.json()).to.eql({ error: 'Insufficient permissions' });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Log out",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "auth_token={{authToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/logout"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('clears the auth cookie', () => {",
+                  "  pm.expect(pm.response.headers.get('Set-Cookie')).to.match(/auth_token=;/);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Current user with a logged-out token",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "auth_token={{authToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/me"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('logout revokes the old token', () => pm.response.to.have.status(401));",
+                  "pm.test('error body', () => {",
+                  "  pm.expect(pm.response.json()).to.eql({ error: 'Invalid or expired authentication token' });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Log in with a wrong password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"wrong-password\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('error body', () => {",
+                  "  pm.expect(pm.response.json()).to.eql({ error: 'Invalid email or password' });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Log in",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('returns the user', () => {",
+                  "  pm.expect(pm.response.json().user.email).to.eql(pm.collectionVariables.get('email'));",
+                  "});",
+                  "pm.test('sets a new auth cookie', () => {",
+                  "  pm.expect(pm.response.headers.get('Set-Cookie')).to.match(/auth_token=[^;]+/);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

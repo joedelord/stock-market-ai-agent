@@ -1,8 +1,9 @@
 {
-  "name": "react-node-postgres-auth-server",
+  "name": "stock-market-ai-agent-server",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "private": true,
+  "description": "Express API for the stock market AI agent",
+  "type": "commonjs",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
@@ -16,12 +17,10 @@
     "market:watch:dev": "node --watch scripts/startMarketScheduler.js",
     "seed:mock": "node scripts/seedMockData.js",
     "email:test": "node scripts/sendTestEmail.js",
-    "eval:analysis": "node scripts/evalAnalysisPrompt.js"
+    "eval:analysis": "node scripts/evalAnalysisPrompt.js",
+    "lint": "eslint ."
   },
-  "keywords": [],
-  "author": "",
   "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
     "@sentry/node": "^11.12.0",
     "bcryptjs": "^3.0.3",
@@ -40,6 +39,9 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.15.0",
+    "globals": "^17.14.0",
     "pino-pretty": "^13.2.0",
     "supertest": "^7.3.2",
     "vitest": "^5.1.1"

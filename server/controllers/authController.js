@@ -77,7 +77,7 @@ const logout = async (req, res, next) => {
 
       try {
         payload = verifyToken(token);
-      } catch (error) {
+      } catch {
         // An invalid or expired token has nothing left to revoke.
       }
 
